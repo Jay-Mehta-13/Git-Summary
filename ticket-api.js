@@ -20,8 +20,28 @@ async function fetchJiraTicket(ticketId, config) {
 				res.on("end", () => {
 					if (res.statusCode === 200) {
 						const issue = JSON.parse(data);
+
+						// Extract description from Jira's ADF format
+						let description = "";
+						if (issue.fields.description && issue.fields.description.content) {
+							issue.fields.description.content.forEach((block) => {
+								if (block.content) {
+									block.content.forEach((item) => {
+										if (item.text) {
+											description += item.text + " ";
+										}
+									});
+								}
+							});
+						}
+
+						const result = {
+							title: issue.fields.summary,
+							description: description.trim() || "No description",
+						};
+
 						console.log(`✓ Fetched Jira ticket: ${ticketId}`);
-						resolve(issue.fields.summary);
+						resolve(result);
 					} else {
 						console.log(`✗ Failed to fetch Jira ticket ${ticketId}: Status ${res.statusCode}`);
 						resolve(null);

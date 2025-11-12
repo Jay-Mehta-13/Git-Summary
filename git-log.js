@@ -58,10 +58,11 @@ const configPath = path.join(__dirname, "config.json");
 				}
 			}
 
-			const description = await fetchTicketDescription(ticketId, config);
+			const ticketInfo = await fetchTicketDescription(ticketId, config);
 
-			if (description) {
-				console.log(`${ticketId} | ${description}`);
+			if (ticketInfo) {
+				console.log(`${ticketId} | ${ticketInfo.title}`);
+				console.log(`  Description: ${ticketInfo.description}`);
 				console.log(`  ${commit}\n`);
 			} else {
 				console.log(`${ticketId} | ${commit}\n`);
