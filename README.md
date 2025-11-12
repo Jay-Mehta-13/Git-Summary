@@ -1,78 +1,162 @@
-# DSU Git Log Script
+# Git Summary - Daily Standup Report Generator
 
-A Node.js script that fetches today's git commits and automatically retrieves ticket details from Jira or Zoho.
+A Node.js script that generates professional daily standup reports from your git commits using AI-powered summarization with Google Gemini.
 
 ## Features
 
-- Fetches git commits from midnight today
-- Filters by author name
-- Extracts ticket IDs from commit messages
-- Fetches ticket title and description from Jira or Zoho
-- Supports custom ticket ID patterns
+- 🔍 Fetches git commits since yesterday
+- 👤 Filters by author name
+- 🎫 Extracts ticket IDs from commit messages (Jira support)
+- 📋 Fetches ticket title and description from Jira (optional)
+- 🤖 AI-powered commit summaries using Google Gemini 2.5 Flash
+- 🚧 Interactive blocker tracking
+- ✏️ Customizable AI prompts
+- 🔧 Interactive setup wizard
+- 📊 Formatted daily standup reports
+- 🎯 No external packages required (uses native Node.js modules)
 
-## Setup
+## Quick Start
 
-1. Copy the example config file:
+1. Run the script for first-time setup:
 
-    ```bash
-    cp config.example.json config.json
-    ```
+   ```bash
+   node git-log.js
+   ```
 
-2. Edit `config.json` with your settings (see Configuration section below)
+2. Follow the interactive setup wizard to configure:
 
-3. Run the script:
-    ```bash
-    node git-log.js
-    ```
+   - Project name (e.g., "SIMGROW")
+   - Project path (absolute path to your git repository)
+   - Git author name
+   - Gemini API key (required) - Get from [Google AI Studio](https://makersuite.google.com/app/apikey)
+   - Jira integration (optional)
+
+3. The script will automatically create:
+
+   - `config.json` - Your configuration
+   - `custom-prompt.txt` - AI prompt template (fully customizable)
+
+4. Run the script daily to generate standup reports:
+   ```bash
+   node git-log.js
+   ```
+
+## Commands
+
+| Command                           | Description                                   |
+| --------------------------------- | --------------------------------------------- |
+| `node git-log.js`                 | Run with existing config                      |
+| `node git-log.js --setup` or `-s` | Reset config and run setup wizard             |
+| `node git-log.js --help` or `-h`  | Show help message                             |
+| `node test-api.js`                | Test Gemini API key and list available models |
+
+## Daily Usage
+
+1. **Start of your workday**: Run the script to generate your standup report
+
+   ```bash
+   node git-log.js
+   ```
+
+2. **Review your commits**: The tool will display all commits since yesterday
+
+3. **Answer blocker question**:
+
+   - Enter `yes` if you have blockers and provide details
+   - Enter `no` if you have no blockers
+
+4. **Get AI summary**: Wait a few seconds for the AI-generated standup report
+
+5. **Copy the summary**: Use the formatted output for your daily standup meeting or Slack update
 
 ## Configuration
 
-All configuration is done in `config.json`. Here's what each field does:
+Configuration is automatically created during setup in `config.json`.
 
 ### Required Fields
 
-| Field                  | Description                                                                                   |
-| ---------------------- | --------------------------------------------------------------------------------------------- |
-| `projectPath`          | Absolute path to your git project directory. The script will run `git log` in this directory. |
-| `taskManagementSystem` | Task management system to use. Supported values: `"jira"` or `"zoho"`                         |
+| Field          | Description                                                                                   |
+| -------------- | --------------------------------------------------------------------------------------------- |
+| `projectName`  | Your project name (displayed in the standup report)                                           |
+| `projectPath`  | Absolute path to your git project directory                                                   |
+| `author`       | Your git author name for filtering commits                                                    |
+| `geminiApiKey` | Google Gemini API key (get from [Google AI Studio](https://makersuite.google.com/app/apikey)) |
 
 ### Optional Fields
 
-| Field                  | Description                                                                                                                 | Default |
-| ---------------------- | --------------------------------------------------------------------------------------------------------------------------- | ------- |
-| `author`               | Filter git logs by author name. Leave empty (`""`) to show all authors' commits.                                            | None    |
-| `customTicketPatterns` | Array of regex patterns (as strings) for custom ticket ID formats. Built-in patterns already support Jira and Zoho formats. | `[]`    |
+| Field                  | Description                                       | Default  |
+| ---------------------- | ------------------------------------------------- | -------- |
+| `taskManagementSystem` | Task system: `"jira"` or `"none"`                 | `"none"` |
+| `customTicketPatterns` | Array of regex patterns for custom ticket formats | `[]`     |
 
-### Jira Configuration
+### Jira Configuration (Optional)
 
-Required only if `taskManagementSystem` is set to `"jira"`:
+If you enable Jira integration during setup:
 
-| Field          | Description                                                                                                             |
-| -------------- | ----------------------------------------------------------------------------------------------------------------------- |
-| `jiraDomain`   | Your Jira domain (e.g., `"company.atlassian.net"`)                                                                      |
-| `jiraEmail`    | Email associated with your Jira account                                                                                 |
-| `jiraApiToken` | Jira API token. Generate from [Atlassian Account Security](https://id.atlassian.com/manage-profile/security/api-tokens) |
+| Field          | Description                                                                                             |
+| -------------- | ------------------------------------------------------------------------------------------------------- |
+| `jiraDomain`   | Your Jira domain (e.g., `company.atlassian.net`)                                                        |
+| `jiraEmail`    | Email for your Jira account                                                                             |
+| `jiraApiToken` | Generate from [Atlassian Account Security](https://id.atlassian.com/manage-profile/security/api-tokens) |
 
-### Zoho Configuration
+## Custom AI Prompts
 
-Required only if `taskManagementSystem` is set to `"zoho"`:
+After first setup, a `custom-prompt.txt` file is created. Edit this file to customize how Gemini summarizes your commits.
 
-| Field             | Description               | Default           |
-| ----------------- | ------------------------- | ----------------- |
-| `zohoDomain`      | Your Zoho Desk domain     | `"desk.zoho.com"` |
-| `zohoOrgId`       | Your Zoho organization ID | None              |
-| `zohoAccessToken` | Zoho OAuth access token   | None              |
+**Template Variables:**
+
+- `{COMMITS}` - Will be replaced with your actual git commits
+- `{PROJECT_NAME}` - Will be replaced with your project name
+- `{BLOCKERS}` - Will be replaced with blocker information
+- `{BLOCKER_SECTION}` - Pre-processed blocker section
+
+**Default Format:**
+
+The tool generates standup reports in this format:
+
+```
+Blocker:
+   None (or bullet points if blockers exist)
+
+Today's Update:
+   [PROJECT_NAME]:
+   • Ticket-ID: Description of work done
+
+Tomorrow's Plan:
+   • Suggested next steps based on today's work
+```
+
+**Customization:**
+
+You can fully customize the prompt in `custom-prompt.txt` to change:
+
+- The format and structure
+- The level of detail
+- The tone and style
+- What information to emphasize
+
+## How It Works
+
+1. **Setup Configuration**: On first run, interactive wizard collects your settings
+2. **Fetch Git Commits**: Retrieves commits since yesterday for your author
+3. **Display Commits**: Shows commits immediately in the terminal
+4. **Extract Ticket IDs**: Automatically detects ticket IDs from commit messages
+5. **Fetch Jira Details**: (Optional) Gets ticket information from Jira
+6. **Ask About Blockers**: Interactive prompt to capture any blockers
+7. **AI Processing**: Sends data to Gemini API with your custom prompt
+8. **Display Report**: Shows formatted daily standup report
+
+The process is non-blocking - you see your commits immediately while the AI summary is being generated.
 
 ## Supported Ticket Formats
 
 The script automatically recognizes:
 
-- **Jira**: `PROJ-123`, `M3-3633` (uppercase letters + optional digits + hyphen + digits)
-- **Zoho**: `AY1Q-T296` (alphanumeric + hyphen + letter + digits)
+- **Jira**: `PROJ-123`, `M3-3633`, `AY1Q-T296` (uppercase letters + optional digits + hyphen + digits/letters)
 
 ### Custom Patterns
 
-To add custom ticket ID patterns, use the `customTicketPatterns` field:
+To add custom ticket ID patterns, edit `config.json`:
 
 ```json
 {
@@ -80,41 +164,186 @@ To add custom ticket ID patterns, use the `customTicketPatterns` field:
 }
 ```
 
-Note: Remember to escape backslashes in JSON strings (use `\\` instead of `\`).
+Note: Escape backslashes in JSON strings (use `\\` instead of `\`).
 
 ## Example Output
 
+### Running the Tool
+
+```bash
+$ node git-log.js
+✅ Using saved configuration
+
+📊 Git Activity Report
+═══════════════════════════════════════
+📁 Project: /home/user/simform-twenty-crm/
+👤 Author: archanVadgama
+📅 Date: Wed Nov 12 12:30:00 2025 +0000
+═══════════════════════════════════════
+
+✨ Commits:
+
+No ticket ID | 4dd5bdef14 [SIMGROW]: feat/AY1Q-T296 fix view creation logic and user relation handling
+
+🚧 Do you have any blockers? (yes/no): no
+
+🤖 Generating AI summary...
+
+═══════════════════════════════════════
+🤖 AI Summary
+═══════════════════════════════════════
+Blocker:
+   • None
+
+Today's Update:
+   SIMGROW:
+   • AY1Q-T296: Fixed view creation logic and user relation handling
+
+Tomorrow's Plan:
+   • Test the updated view creation logic and user relation handling
+   • Refine view creation based on testing feedback
+═══════════════════════════════════════
+
+💡 Tip: To reset configuration, run: node git-log.js --setup
 ```
-M3-3633 | Store all calls and SMS records
-  Description: This feature adds functionality to store call and SMS records...
-  9ad07bb3b Merged in feat/M3-3633/store-all-calls-and-sms-records (pull request #3064)
 
-No ticket ID | a1b2c3d4e Updated documentation
+### With Blockers
 
+```bash
+🚧 Do you have any blockers? (yes/no): yes
+Please describe your blocker(s): Cannot merge to main branch because QA testing is pending
+
+═══════════════════════════════════════
+🤖 AI Summary
+═══════════════════════════════════════
+Blocker:
+   • Cannot merge to main branch due to pending QA testing
+
+Today's Update:
+   SIMGROW:
+   • AY1Q-T296: Fixed view creation logic and user relation handling
+
+Tomorrow's Plan:
+   • Address any feedback from QA regarding the recent fix
+   • Prepare for merging once QA testing is complete
+═══════════════════════════════════════
 ```
 
-## Files
+## Project Structure
 
-- `git-log.js` - Main script
-- `ticket-api.js` - API integration for Jira and Zoho
-- `config.json` - Your configuration (not tracked in git)
-- `config.example.json` - Example configuration template
+```
+├── git-log.js              # Main script - entry point
+├── gemini-service.js       # Gemini AI integration (uses native https module)
+├── ticket-api.js           # Jira API integration
+├── test-api.js             # API key testing utility
+├── config.json             # Your configuration (auto-generated, gitignored)
+├── custom-prompt.txt       # AI prompt template (auto-generated, customizable)
+├── config.example.json     # Example configuration template
+└── README.md               # This file
+```
+
+### Key Files
+
+- **git-log.js**: Main script that orchestrates the entire flow
+- **gemini-service.js**: Handles AI summarization using Google Gemini 2.5 Flash
+- **ticket-api.js**: Fetches ticket details from Jira (optional)
+- **test-api.js**: Utility to test your Gemini API key and list available models
+- **config.json**: Stores your configuration (created during setup)
+- **custom-prompt.txt**: Customizable prompt template for AI summarization
 
 ## Troubleshooting
 
 ### No commits shown
 
 - Check that `projectPath` points to a valid git repository
-- Verify you have commits from today
-- Check `author` filter is correct
+- Verify you have commits since yesterday
+- Check `author` filter matches your git author name exactly
+- Try running `git log --since="yesterday" --author="YourName"` manually in your project directory
 
-### API calls failing
+### Gemini API errors
 
-- For Jira: Verify `jiraDomain`, `jiraEmail`, and `jiraApiToken` are correct
-- For Zoho: Verify `zohoOrgId` and `zohoAccessToken` are correct
-- Check the console logs for specific error messages (marked with ✗)
+#### "Model not found" error
+
+- Run `node test-api.js` to verify your API key and see available models
+- The tool uses `gemini-2.5-flash` model by default
+- Ensure you have a valid API key from [Google AI Studio](https://makersuite.google.com/app/apikey)
+
+#### Quota exceeded
+
+- Check your API quota at [Google AI Studio](https://makersuite.google.com/)
+- Free tier has rate limits; wait a few minutes and retry
+- Consider upgrading your API plan if needed
+
+### Jira API calls failing
+
+- Verify `jiraDomain`, `jiraEmail`, and `jiraApiToken` are correct
+- Test Jira credentials manually: `curl -u email:token https://your-domain.atlassian.net/rest/api/3/myself`
+- Check the console logs for specific error messages (marked with ⚠️)
+- Regenerate Jira API token from [Atlassian Account Security](https://id.atlassian.com/manage-profile/security/api-tokens)
 
 ### Ticket IDs not detected
 
 - Check your commit messages contain ticket IDs in supported formats
-- Add custom patterns to `customTicketPatterns` if needed
+- Supported patterns: `PROJ-123`, `M3-3633`, `AY1Q-T296`
+- Add custom patterns to `customTicketPatterns` in `config.json`
+
+### Test Your API Key
+
+Use the included test utility:
+
+```bash
+node test-api.js
+```
+
+This will verify your API key and show all available Gemini models.
+
+### Reset Configuration
+
+If you need to start over:
+
+```bash
+node git-log.js --setup
+```
+
+## Technical Details
+
+- **Node.js Version**: Requires Node.js v18+ (tested on v22)
+- **Dependencies**: None! Uses only native Node.js modules
+  - `https` - For API requests
+  - `child_process` - For git commands
+  - `fs` - For file operations
+  - `readline` - For interactive prompts
+- **API Used**: Google Gemini 2.5 Flash via REST API
+- **Git Command**: `git log --oneline --since="yesterday" --author="<author>"`
+
+## Benefits
+
+✅ **No Manual Report Writing**: Automatically generates standup reports from your commits  
+✅ **Time Saver**: Reduces daily standup prep time from 5-10 minutes to under a minute  
+✅ **Consistent Format**: Always produces well-formatted, professional reports  
+✅ **Blocker Tracking**: Interactive prompts ensure you don't forget to mention blockers  
+✅ **Customizable**: Fully customizable AI prompts to match your team's standup format  
+✅ **Zero Dependencies**: No npm packages to install or maintain  
+✅ **Privacy Friendly**: Runs locally, only sends commit data to Gemini for summarization  
+✅ **Easy Setup**: One-time interactive configuration, then just run daily
+
+## Contributing
+
+Contributions are welcome! Feel free to:
+
+- Report bugs
+- Suggest new features
+- Submit pull requests
+- Improve documentation
+
+## License
+
+ISC
+
+## Author
+
+Created for daily standup report automation using AI-powered summarization.
+
+---
+
+**Made with ❤️ for developers who want to spend less time writing standup reports and more time coding!**
