@@ -1,12 +1,12 @@
 {
-	"projectPath": "/path/to/your/project",
-	"author": "Your Name",
-	"taskManagementSystem": "jira",
-	"customTicketPatterns": [],
-	"jiraDomain": "your-domain.atlassian.net",
-	"jiraEmail": "your-email@example.com",
-	"jiraApiToken": "your-jira-api-token",
-	"zohoDomain": "desk.zoho.com",
-	"zohoOrgId": "your-zoho-org-id",
-	"zohoAccessToken": "your-zoho-access-token"
+  "projectName": "YOUR_PROJECT_NAME",
+  "projectPath": "/path/to/your/project",
+  "author": "Your Name",
+  "geminiApiKey": "your-gemini-api-key-here",
+  "taskManagementSystem": "jira",
+  "jiraDomain": "your-domain.atlassian.net",
+  "jiraEmail": "your-email@example.com",
+  "jiraApiToken": "your-jira-api-token",
+  "customTicketPatterns": [],
+  "setupDate": "2025-01-01T00:00:00.000Z"
 }
