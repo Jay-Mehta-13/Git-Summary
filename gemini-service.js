@@ -5,19 +5,33 @@ const https = require("https");
 const PROMPT_FILE = path.join(__dirname, "custom-prompt.txt");
 
 // Default prompt template
-const DEFAULT_PROMPT = `You are a technical assistant helping create a daily standup update. Analyze these git commits and blocker information to provide a summary in the following format:
+const DEFAULT_PROMPT = `You are a technical assistant helping create a daily standup update. Analyze these git commits (organized by project) and blocker information to provide a summary in the following format:
 
 Blocker:
-   {BLOCKER_SECTION}
+   [Analyze the blocker information and determine which project(s) it affects. ONLY show projects that have actual blockers. If there are no blockers at all, just output "   • None". Do NOT list projects with "None" - only include projects that have real blockers]
+   
+   Project Name (only if it has blockers):
+   • [Project-specific blocker description]
 
 Today's Update:
-   {PROJECT_NAME}:
+   [For EACH project that has commits, create a section with project name and bullet points]
+   
+   Project Name 1:
    • [Create bullet points from the git commits - each commit should be a concise bullet point describing what was done]
+   
+   Project Name 2:
+   • [Create bullet points for this project's commits]
 
 Tomorrow's Plan:
-   • [Based on the commits, suggest what might be the next logical steps or continuation of the work]
+   [Organize tomorrow's plan by project, suggesting next steps for each project based on today's commits]
+   
+   Project Name 1:
+   • [Based on this project's commits, suggest what might be the next logical steps]
+   
+   Project Name 2:
+   • [Based on this project's commits, suggest what might be the next logical steps]
 
-Git commits:
+Git commits organized by project:
 {COMMITS}
 
 Blocker information provided by user:
@@ -26,12 +40,14 @@ Blocker information provided by user:
 Important:
 - DO NOT use bold formatting (no ** or __) anywhere in the response
 - Use plain text only with proper indentation
+- For the Blocker section: ONLY list projects that have actual blockers. If no blockers at all, just write "   • None". Do NOT write "Project Name: • None" for projects without blockers. Only show project sections when there are real blockers for that project. Use proper indentation (3 spaces before the bullet).
+- For Today's Update: Create separate sections for EACH project. Use the exact project names from the commits above
+- For Tomorrow's Plan: Create separate sections for EACH project with next steps specific to that project's work
 - When creating bullet points for Today's Update, first search for ticket ID patterns (like AY1Q-T296, PROJ-123, etc.) in the git commit and include it at the start of the bullet point, followed by the description (Example: • AY1Q-T296: Fixed view creation logic)
-- For the Blocker section: It will already be formatted. Just use it as is with proper indentation (3 spaces before the bullet)
 - Use bullet point character (•) for all lists (blockers, todays update and tomorrow's plan), not asterisks (*)
 - Keep all bullet points concise and professional
-- Focus on what was accomplished based on the commits
-- Suggest logical next steps for Tomorrow's Plan`;
+- Focus on what was accomplished based on the commits for each project
+- Suggest logical next steps for Tomorrow's Plan specific to each project's context`;
 
 /**
  * Load custom prompt from file or use default
@@ -109,33 +125,34 @@ function makeHttpsRequest(url, options, postData) {
 
 /**
  * Summarize commits using Gemini API
- * @param {Array} commits - Array of commit strings
+ * @param {Array} projectCommits - Array of objects with {projectName, commits: []}
  * @param {string} apiKey - Gemini API key
- * @param {string} projectName - Project name to include in summary
  * @param {string} blockerInfo - Blocker information from user
  * @returns {Promise<string|null>} - AI generated summary or null
  */
 async function summarizeWithGemini(
-  commits,
+  projectCommits,
   apiKey,
-  projectName = "Project",
   blockerInfo = "None"
 ) {
   try {
-    const commitsText = commits.join("\n");
     const promptTemplate = loadPromptTemplate();
 
-    // Determine blocker section content
-    const blockerSection =
-      blockerInfo === "None" || !blockerInfo.trim()
-        ? "• None"
-        : "Summarize the following in bullet points:\n" + blockerInfo;
+    // Build commits text organized by project
+    let commitsText = "";
+    let projectNames = [];
+
+    for (const project of projectCommits) {
+      projectNames.push(project.projectName);
+      commitsText += `\n=== ${project.projectName} ===\n`;
+      commitsText += project.commits.join("\n");
+      commitsText += "\n";
+    }
 
     // Replace placeholders with actual data
     let prompt = promptTemplate.replace("{COMMITS}", commitsText);
-    prompt = prompt.replace("{PROJECT_NAME}", projectName);
+    prompt = prompt.replace("{PROJECT_NAMES}", projectNames.join(", "));
     prompt = prompt.replace("{BLOCKERS}", blockerInfo);
-    prompt = prompt.replace("{BLOCKER_SECTION}", blockerSection);
 
     const postData = JSON.stringify({
       contents: [

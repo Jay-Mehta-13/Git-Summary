@@ -51,17 +51,47 @@ function saveConfig(config) {
   }
 }
 
+// Function to setup a project
+async function setupProject() {
+  const project = {};
+
+  // Project Name
+  project.name = await prompt("Enter project name: ");
+
+  // Project Path
+  project.path = await prompt("Enter the path to your project: ");
+
+  // Jira Integration
+  const useJira = await prompt(
+    "\nDo you use Jira for this project? (yes/no): "
+  );
+
+  if (useJira.toLowerCase() === "yes" || useJira.toLowerCase() === "y") {
+    console.log("\n📋 Jira Configuration:");
+    const jiraDomain = await prompt(
+      "Enter Jira domain (e.g., your-domain.atlassian.net): "
+    );
+    const jiraEmail = await prompt("Enter Jira email: ");
+    const jiraApiToken = await prompt("Enter Jira API token: ");
+
+    project.jira = {
+      domain: jiraDomain,
+      email: jiraEmail,
+      apiToken: jiraApiToken,
+    };
+  }
+
+  return project;
+}
+
 // Function to run initial setup
 async function setupConfig() {
   console.log("\n🔧 First-time setup - Let's configure your environment\n");
 
-  const config = {};
-
-  // Project Name
-  config.projectName = await prompt("Enter your project name: ");
-
-  // Project Path
-  config.projectPath = await prompt("Enter the path to your project: ");
+  const config = {
+    projects: [],
+    customTicketPatterns: [],
+  };
 
   // Author
   config.author = await prompt("Enter your git author name: ");
@@ -79,39 +109,56 @@ async function setupConfig() {
   }
   config.geminiApiKey = geminiApiKey.trim();
 
-  // Jira Integration
-  const useJira = await prompt("\nDo you use Jira? (yes/no): ");
-  let jiraConfig = null;
+  // Add first project
+  console.log("\n📁 Project Configuration:");
+  const firstProject = await setupProject();
+  config.projects.push(firstProject);
 
-  if (useJira.toLowerCase() === "yes" || useJira.toLowerCase() === "y") {
-    console.log("\n📋 Jira Configuration:");
-    const jiraDomain = await prompt(
-      "Enter Jira domain (e.g., your-domain.atlassian.net): "
-    );
-    const jiraEmail = await prompt("Enter Jira email: ");
-    const jiraApiToken = await prompt("Enter Jira API token: ");
-
-    jiraConfig = {
-      domain: jiraDomain,
-      email: jiraEmail,
-      apiToken: jiraApiToken,
-    };
-
-    config.taskManagementSystem = "jira";
-    config.jiraDomain = jiraDomain;
-    config.jiraEmail = jiraEmail;
-    config.jiraApiToken = jiraApiToken;
-  } else {
-    config.taskManagementSystem = "none";
-  }
-
-  // Custom patterns
-  config.customTicketPatterns = [];
   config.setupDate = new Date().toISOString();
 
   // Save config
   saveConfig(config);
   return config;
+}
+
+// Function to add a new project
+async function addProject() {
+  const config = loadConfig();
+  if (!config) {
+    console.error("❌ No configuration found. Please run initial setup first.");
+    console.log("💡 Run: node git-log.js --setup\n");
+    process.exit(1);
+  }
+
+  console.log("\n➕ Adding a new project\n");
+  const newProject = await setupProject();
+  config.projects.push(newProject);
+
+  saveConfig(config);
+  console.log(`✅ Project "${newProject.name}" added successfully!\n`);
+}
+
+// Function to list all projects
+function listProjects() {
+  const config = loadConfig();
+  if (!config) {
+    console.error("❌ No configuration found. Please run initial setup first.");
+    console.log("💡 Run: node git-log.js --setup\n");
+    process.exit(1);
+  }
+
+  if (!config.projects || config.projects.length === 0) {
+    console.log("\nℹ️  No projects configured.\n");
+    return;
+  }
+
+  console.log("\n📋 Configured Projects:\n");
+  config.projects.forEach((project, index) => {
+    console.log(`${index + 1}. ${project.name}`);
+    console.log(`   Path: ${project.path}`);
+    console.log(`   Jira: ${project.jira ? "✓ Enabled" : "✗ Disabled"}`);
+    console.log("");
+  });
 }
 
 (async () => {
@@ -127,17 +174,45 @@ async function setupConfig() {
       }
     }
 
+    if (args.includes("--add-project") || args.includes("-a")) {
+      await addProject();
+      rl.close();
+      process.exit(0);
+    }
+
+    if (args.includes("--list-projects") || args.includes("-l")) {
+      listProjects();
+      rl.close();
+      process.exit(0);
+    }
+
     if (args.includes("--help") || args.includes("-h")) {
       console.log("\n📚 Git Summary Tool - Usage:\n");
       console.log(
-        "  node git-log.js           Run the tool with existing config"
+        "  node git-log.js                  Run the tool with existing config"
       );
       console.log(
-        "  node git-log.js --setup   Delete config and run initial setup"
+        "  node git-log.js --setup          Delete config and run initial setup"
       );
-      console.log("  node git-log.js -s        Short version of --setup");
-      console.log("  node git-log.js --help    Show this help message");
-      console.log("  node git-log.js -h        Short version of --help\n");
+      console.log(
+        "  node git-log.js -s               Short version of --setup"
+      );
+      console.log(
+        "  node git-log.js --add-project    Add a new project to config"
+      );
+      console.log(
+        "  node git-log.js -a               Short version of --add-project"
+      );
+      console.log(
+        "  node git-log.js --list-projects  List all configured projects"
+      );
+      console.log(
+        "  node git-log.js -l               Short version of --list-projects"
+      );
+      console.log("  node git-log.js --help           Show this help message");
+      console.log(
+        "  node git-log.js -h               Short version of --help\n"
+      );
       process.exit(0);
     }
 
@@ -152,8 +227,9 @@ async function setupConfig() {
 
     rl.close();
 
-    if (!config.projectPath) {
-      console.error("❌ Error: projectPath is not configured");
+    if (!config.projects || config.projects.length === 0) {
+      console.error("❌ Error: No projects configured");
+      console.log("💡 Run 'node git-log.js --setup' to configure a project\n");
       process.exit(1);
     }
 
@@ -163,7 +239,6 @@ async function setupConfig() {
       process.exit(1);
     }
 
-    const absolutePath = path.resolve(config.projectPath);
     const today = new Date();
 
     // Format date to: "Fri Nov 7 07:11:18 2025 +0000"
@@ -193,137 +268,195 @@ async function setupConfig() {
 
     const formattedDate = `${dayName} ${monthName} ${date} ${hours}:${minutes}:${seconds} ${year} +0000`;
 
-    let gitCommand = `git log --oneline --since="yesterday"`;
-
-    if (config.author) {
-      gitCommand += ` --author="${config.author}"`;
-    }
-
     console.log("\n📊 Git Activity Report");
     console.log("═══════════════════════════════════════");
-    console.log(`📁 Project: ${config.projectPath}`);
-    console.log(`👤 Author: ${config.author}`);
-    console.log(`📅 Date: ${formattedDate}`);
+    console.log(`� Author: ${config.author}`);
+    console.log(`� Date: ${formattedDate}`);
+    console.log(`� Projects: ${config.projects.length}`);
     console.log("═══════════════════════════════════════\n");
 
-    const result = execSync(gitCommand, {
-      cwd: absolutePath,
-      encoding: "utf-8",
-    });
+    // Collect commits per project
+    const projectCommits = []; // Array of {projectName, commits: []}
+    let totalCommitCount = 0;
 
-    const commits = result
-      .trim()
-      .split("\n")
-      .filter((line) => line);
+    // Built-in patterns for Jira
+    const builtInPatterns = [
+      /[A-Z]+\d*-\d+/, // Jira: PROJ-123, M3-3633
+    ];
 
-    if (commits.length === 0 || (commits.length === 1 && commits[0] === "")) {
-      console.log("ℹ️  No commits found for today.\n");
-    } else {
-      console.log("✨ Commits:\n");
-
-      // Built-in patterns for Jira
-      const builtInPatterns = [
-        /[A-Z]+\d*-\d+/, // Jira: PROJ-123, M3-3633
-      ];
-
-      // Combine built-in patterns with custom patterns from config
-      const patterns = [...builtInPatterns];
-      if (
-        config.customTicketPatterns &&
-        Array.isArray(config.customTicketPatterns)
-      ) {
-        config.customTicketPatterns.forEach((pattern) => {
-          patterns.push(new RegExp(pattern));
-        });
-      }
-
-      const commitDetails = [];
-
-      // Store commits for AI processing but continue execution
-      for (const commit of commits) {
-        let ticketId = "No ticket ID";
-
-        for (const pattern of patterns) {
-          const match = commit.match(pattern);
-          if (match) {
-            ticketId = match[0];
-            break;
-          }
-        }
-
-        const ticketInfo = await fetchTicketDescription(ticketId, config);
-
-        if (ticketInfo) {
-          const displayLine = `${ticketId} | ${ticketInfo.title}`;
-          console.log(displayLine);
-          console.log(`  Description: ${ticketInfo.description}`);
-          console.log(`  ${commit}\n`);
-          commitDetails.push(`${ticketId} | ${ticketInfo.title} - ${commit}`);
-        } else {
-          console.log(`${ticketId} | ${commit}\n`);
-          commitDetails.push(commit);
-        }
-      }
-
-      // Ask about blockers
-      const rlBlocker = readline.createInterface({
-        input: process.stdin,
-        output: process.stdout,
+    // Combine built-in patterns with custom patterns from config
+    const patterns = [...builtInPatterns];
+    if (
+      config.customTicketPatterns &&
+      Array.isArray(config.customTicketPatterns)
+    ) {
+      config.customTicketPatterns.forEach((pattern) => {
+        patterns.push(new RegExp(pattern));
       });
+    }
 
-      const hasBlockers = await new Promise((resolve) => {
-        rlBlocker.question(
-          "\n🚧 Do you have any blockers? (yes/no): ",
-          (answer) => {
-            resolve(answer);
-          }
-        );
-      });
+    // Process each project
+    for (const project of config.projects) {
+      const projectCommitDetails = [];
+      const absolutePath = path.resolve(project.path);
 
-      let blockerInfo = "None";
-      if (
-        hasBlockers.toLowerCase() === "yes" ||
-        hasBlockers.toLowerCase() === "y"
-      ) {
-        blockerInfo = await new Promise((resolve) => {
-          rlBlocker.question("Please describe your blocker(s): ", (answer) => {
-            rlBlocker.close();
-            resolve(answer);
-          });
-        });
-      } else {
-        rlBlocker.close();
+      // let gitCommand = `git log --oneline --since="yesterday"`;
+      let gitCommand = `git log --oneline --max-count=5`;
+      if (config.author) {
+        gitCommand += ` --author="${config.author}"`;
       }
 
-      // Start AI summary generation
-      console.log("\n🤖 Generating AI summary...");
+      console.log(`\n📁 Project: ${project.name}`);
+      console.log(`   Path: ${project.path}`);
+      console.log("───────────────────────────────────────\n");
 
-      // Process AI summary - execution continues while waiting
       try {
-        const summary = await summarizeWithGemini(
-          commitDetails,
-          config.geminiApiKey,
-          config.projectName || "Project",
-          blockerInfo
-        );
-        if (summary) {
-          displaySummary(summary);
+        const result = execSync(gitCommand, {
+          cwd: absolutePath,
+          encoding: "utf-8",
+        });
+
+        const commits = result
+          .trim()
+          .split("\n")
+          .filter((line) => line);
+
+        if (
+          commits.length === 0 ||
+          (commits.length === 1 && commits[0] === "")
+        ) {
+          console.log(
+            "ℹ️  Today there is no commits found for this project.\n"
+          );
         } else {
-          console.log("⚠️  No summary generated\n");
+          console.log("   ✨ Commits:\n");
+          totalCommitCount += commits.length;
+
+          // Store commits for AI processing but continue execution
+          for (const commit of commits) {
+            let ticketId = "No ticket ID";
+
+            for (const pattern of patterns) {
+              const match = commit.match(pattern);
+              if (match) {
+                ticketId = match[0];
+                break;
+              }
+            }
+
+            // Use project-specific Jira config if available
+            const jiraConfig = project.jira
+              ? {
+                  ...config,
+                  jiraDomain: project.jira.domain,
+                  jiraEmail: project.jira.email,
+                  jiraApiToken: project.jira.apiToken,
+                }
+              : config;
+
+            const ticketInfo = await fetchTicketDescription(
+              ticketId,
+              jiraConfig
+            );
+
+            if (ticketInfo) {
+              const displayLine = `      ${ticketId} | ${ticketInfo.title}`;
+              console.log(displayLine);
+              console.log(`      Description: ${ticketInfo.description}`);
+              console.log(`      ${commit}\n`);
+              projectCommitDetails.push(
+                `${ticketId} | ${ticketInfo.title} - ${commit}`
+              );
+            } else {
+              console.log(`      ${ticketId} | ${commit}\n`);
+              projectCommitDetails.push(commit);
+            }
+          }
+
+          // Store this project's commits
+          if (projectCommitDetails.length > 0) {
+            projectCommits.push({
+              projectName: project.name,
+              commits: projectCommitDetails,
+            });
+          }
         }
       } catch (error) {
-        console.error(`⚠️  ${error.message}\n`);
+        console.log(`   ⚠️  Error fetching git log: ${error.message}\n`);
       }
     }
 
-    // Show additional info if Jira is configured
-    if (config.taskManagementSystem === "jira" && config.jiraDomain) {
+    if (totalCommitCount === 0) {
+      console.log("\n═══════════════════════════════════════");
+      console.log("ℹ️  No commits found across all projects.\n");
+      process.exit(0);
+    }
+
+    console.log("\n═══════════════════════════════════════");
+
+    // Ask about blockers
+    const rlBlocker = readline.createInterface({
+      input: process.stdin,
+      output: process.stdout,
+    });
+
+    const hasBlockers = await new Promise((resolve) => {
+      rlBlocker.question(
+        "\n🚧 Do you have any blockers? (yes/no): ",
+        (answer) => {
+          resolve(answer);
+        }
+      );
+    });
+
+    let blockerInfo = "None";
+    if (
+      hasBlockers.toLowerCase() === "yes" ||
+      hasBlockers.toLowerCase() === "y"
+    ) {
+      blockerInfo = await new Promise((resolve) => {
+        rlBlocker.question("Please describe your blocker(s): ", (answer) => {
+          rlBlocker.close();
+          resolve(answer);
+        });
+      });
+    } else {
+      rlBlocker.close();
+    }
+
+    // Start AI summary generation
+    console.log("\n🤖 Generating AI summary...");
+
+    // Process AI summary - execution continues while waiting
+    try {
+      const summary = await summarizeWithGemini(
+        projectCommits,
+        config.geminiApiKey,
+        blockerInfo
+      );
+      if (summary) {
+        displaySummary(summary);
+      } else {
+        console.log("⚠️  No summary generated\n");
+      }
+    } catch (error) {
+      console.error(`⚠️  ${error.message}\n`);
+    }
+
+    // Show additional info if any project has Jira configured
+    const jiraProjects = config.projects.filter((p) => p.jira);
+    if (jiraProjects.length > 0) {
       console.log("📋 Jira Integration: Enabled");
-      console.log(`   Domain: ${config.jiraDomain}`);
+      jiraProjects.forEach((p) => {
+        console.log(`   ${p.name}: ${p.jira.domain}`);
+      });
     }
 
     console.log(
-      `\n💡 Tip: To reset configuration, run: node git-log.js --setup\n`
+      `\n💡 Tip: To add more projects, run: node git-log.js --add-project`
+    );
+    console.log(
+      `💡 Tip: To list all projects, run: node git-log.js --list-projects\n`
     );
   } catch (error) {
     console.error("❌ Error:", error.message);

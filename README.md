@@ -6,8 +6,9 @@ A Node.js script that generates professional daily standup reports from your git
 
 - 🔍 Fetches git commits since yesterday
 - 👤 Filters by author name
+- 📁 **Multi-project support** - Track commits across multiple repositories
 - 🎫 Extracts ticket IDs from commit messages (Jira support)
-- 📋 Fetches ticket title and description from Jira (optional)
+- 📋 Fetches ticket title and description from Jira (optional per project)
 - 🤖 AI-powered commit summaries using Google Gemini 2.5 Flash
 - 🚧 Interactive blocker tracking
 - ✏️ Customizable AI prompts
@@ -25,30 +26,39 @@ A Node.js script that generates professional daily standup reports from your git
 
 2. Follow the interactive setup wizard to configure:
 
-   - Project name (e.g., "SIMGROW")
-   - Project path (absolute path to your git repository)
-   - Git author name
+   - Git author name (used across all projects)
    - Gemini API key (required) - Get from [Google AI Studio](https://makersuite.google.com/app/apikey)
-   - Jira integration (optional)
+   - First project details:
+     - Project name (e.g., "SIMGROW")
+     - Project path (absolute path to your git repository)
+     - Jira integration (optional per project)
 
 3. The script will automatically create:
 
    - `config.json` - Your configuration
    - `custom-prompt.txt` - AI prompt template (fully customizable)
 
-4. Run the script daily to generate standup reports:
+4. Add more projects (optional):
+
+   ```bash
+   node git-log.js --add-project
+   ```
+
+5. Run the script daily to generate standup reports:
    ```bash
    node git-log.js
    ```
 
 ## Commands
 
-| Command                           | Description                                   |
-| --------------------------------- | --------------------------------------------- |
-| `node git-log.js`                 | Run with existing config                      |
-| `node git-log.js --setup` or `-s` | Reset config and run setup wizard             |
-| `node git-log.js --help` or `-h`  | Show help message                             |
-| `node test-api.js`                | Test Gemini API key and list available models |
+| Command                                   | Description                                   |
+| ----------------------------------------- | --------------------------------------------- |
+| `node git-log.js`                         | Run with existing config                      |
+| `node git-log.js --setup` or `-s`         | Reset config and run setup wizard             |
+| `node git-log.js --add-project` or `-a`   | Add a new project to existing config          |
+| `node git-log.js --list-projects` or `-l` | List all configured projects                  |
+| `node git-log.js --help` or `-h`          | Show help message                             |
+| `node test-api.js`                        | Test Gemini API key and list available models |
 
 ## Daily Usage
 
@@ -73,31 +83,127 @@ A Node.js script that generates professional daily standup reports from your git
 
 Configuration is automatically created during setup in `config.json`.
 
-### Required Fields
+### Global Configuration
 
-| Field          | Description                                                                                   |
-| -------------- | --------------------------------------------------------------------------------------------- |
-| `projectName`  | Your project name (displayed in the standup report)                                           |
-| `projectPath`  | Absolute path to your git project directory                                                   |
-| `author`       | Your git author name for filtering commits                                                    |
-| `geminiApiKey` | Google Gemini API key (get from [Google AI Studio](https://makersuite.google.com/app/apikey)) |
+| Field                  | Description                                                                                   | Required |
+| ---------------------- | --------------------------------------------------------------------------------------------- | -------- |
+| `author`               | Your git author name for filtering commits (applies to all projects)                          | Yes      |
+| `geminiApiKey`         | Google Gemini API key (get from [Google AI Studio](https://makersuite.google.com/app/apikey)) | Yes      |
+| `customTicketPatterns` | Array of regex patterns for custom ticket formats                                             | No       |
 
-### Optional Fields
+### Project Configuration
 
-| Field                  | Description                                       | Default  |
-| ---------------------- | ------------------------------------------------- | -------- |
-| `taskManagementSystem` | Task system: `"jira"` or `"none"`                 | `"none"` |
-| `customTicketPatterns` | Array of regex patterns for custom ticket formats | `[]`     |
+Each project in the `projects` array has the following structure:
 
-### Jira Configuration (Optional)
+| Field  | Description                           | Required |
+| ------ | ------------------------------------- | -------- |
+| `name` | Project name (displayed in reports)   | Yes      |
+| `path` | Absolute path to git repository       | Yes      |
+| `jira` | Jira configuration object (see below) | No       |
 
-If you enable Jira integration during setup:
+### Jira Configuration (Optional per Project)
 
-| Field          | Description                                                                                             |
-| -------------- | ------------------------------------------------------------------------------------------------------- |
-| `jiraDomain`   | Your Jira domain (e.g., `company.atlassian.net`)                                                        |
-| `jiraEmail`    | Email for your Jira account                                                                             |
-| `jiraApiToken` | Generate from [Atlassian Account Security](https://id.atlassian.com/manage-profile/security/api-tokens) |
+Each project can have its own Jira configuration:
+
+| Field      | Description                                                                                             |
+| ---------- | ------------------------------------------------------------------------------------------------------- |
+| `domain`   | Your Jira domain (e.g., `company.atlassian.net`)                                                        |
+| `email`    | Email for your Jira account                                                                             |
+| `apiToken` | Generate from [Atlassian Account Security](https://id.atlassian.com/manage-profile/security/api-tokens) |
+
+### Example Config Structure
+
+```json
+{
+  "author": "John Doe",
+  "geminiApiKey": "your-api-key-here",
+  "projects": [
+    {
+      "name": "Project A",
+      "path": "/home/user/projects/project-a",
+      "jira": {
+        "domain": "company.atlassian.net",
+        "email": "john@company.com",
+        "apiToken": "your-jira-token"
+      }
+    },
+    {
+      "name": "Project B",
+      "path": "/home/user/projects/project-b"
+    }
+  ],
+  "customTicketPatterns": [],
+  "setupDate": "2025-01-01T00:00:00.000Z"
+}
+```
+
+## Managing Multiple Projects
+
+### Adding Projects
+
+You can manage multiple repositories and get a unified standup report:
+
+1. **During initial setup**: Configure your first project
+2. **Add more projects**:
+   ```bash
+   node git-log.js --add-project
+   ```
+3. **Follow the prompts** for each new project (name, path, Jira config)
+
+### Listing Projects
+
+View all configured projects:
+
+```bash
+node git-log.js --list-projects
+```
+
+### Multi-Project Workflow
+
+When you have multiple projects configured:
+
+1. The tool runs `git log` on **each project** repository
+2. Commits are **labeled with project names** (e.g., `[Project A] JIRA-123: Fix bug`)
+3. All commits are **aggregated** and shown grouped by project
+4. A **unified AI summary** is generated covering all projects
+5. If projects have different Jira configs, **each uses its own** Jira credentials
+
+### Example Multi-Project Output
+
+```
+📊 Git Activity Report
+═══════════════════════════════════════
+👤 Author: John Doe
+📅 Date: Fri Jan 10 09:30:00 2025 +0000
+📁 Projects: 3
+═══════════════════════════════════════
+
+📁 Project: Frontend App
+   Path: /home/user/projects/frontend
+───────────────────────────────────────
+
+   ✨ Commits:
+
+      FEAT-123 | Implement user authentication
+      Description: Add login and signup forms
+      abc1234 Implement login page
+
+📁 Project: Backend API
+   Path: /home/user/projects/backend
+───────────────────────────────────────
+
+   ✨ Commits:
+
+      API-456 | Create user endpoints
+      Description: REST API for user management
+      def5678 Add user CRUD operations
+
+═══════════════════════════════════════
+
+🚧 Do you have any blockers? (yes/no): no
+
+🤖 Generating AI summary...
+```
 
 ## Custom AI Prompts
 
@@ -105,22 +211,26 @@ After first setup, a `custom-prompt.txt` file is created. Edit this file to cust
 
 **Template Variables:**
 
-- `{COMMITS}` - Will be replaced with your actual git commits
-- `{PROJECT_NAME}` - Will be replaced with your project name
+- `{COMMITS}` - Will be replaced with your actual git commits organized by project
+- `{PROJECT_NAMES}` - Will be replaced with comma-separated list of project names
 - `{BLOCKERS}` - Will be replaced with blocker information
 - `{BLOCKER_SECTION}` - Pre-processed blocker section
 
 **Default Format:**
 
-The tool generates standup reports in this format:
+The tool generates standup reports with **separate sections for each project**:
 
 ```
 Blocker:
    None (or bullet points if blockers exist)
 
 Today's Update:
-   [PROJECT_NAME]:
-   • Ticket-ID: Description of work done
+
+   Project Name 1:
+   • Ticket-ID: Description of work done for this project
+
+   Project Name 2:
+   • Ticket-ID: Description of work done for this project
 
 Tomorrow's Plan:
    • Suggested next steps based on today's work
@@ -138,15 +248,23 @@ You can fully customize the prompt in `custom-prompt.txt` to change:
 ## How It Works
 
 1. **Setup Configuration**: On first run, interactive wizard collects your settings
-2. **Fetch Git Commits**: Retrieves commits since yesterday for your author
-3. **Display Commits**: Shows commits immediately in the terminal
+2. **Fetch Git Commits**: Retrieves commits since yesterday for your author from **each configured project**
+3. **Display Commits**: Shows commits immediately in the terminal, organized by project
 4. **Extract Ticket IDs**: Automatically detects ticket IDs from commit messages
-5. **Fetch Jira Details**: (Optional) Gets ticket information from Jira
-6. **Ask About Blockers**: Interactive prompt to capture any blockers
-7. **AI Processing**: Sends data to Gemini API with your custom prompt
-8. **Display Report**: Shows formatted daily standup report
+5. **Fetch Jira Details**: (Optional) Gets ticket information from Jira using project-specific credentials
+6. **Ask About Blockers**: Interactive prompt to capture any blockers (asked once for all projects)
+7. **AI Processing**: Sends all project commits to Gemini API with your custom prompt
+8. **Display Report**: Shows formatted daily standup report with **separate sections for each project**
 
 The process is non-blocking - you see your commits immediately while the AI summary is being generated.
+
+### Multi-Project AI Summary
+
+When you have multiple projects, the AI generates:
+
+- **Separate "Today's Update" sections** for each project
+- **Unified "Tomorrow's Plan"** considering work across all projects
+- **Single "Blocker" section** applicable to all work
 
 ## Supported Ticket Formats
 
