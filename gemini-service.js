@@ -5,49 +5,64 @@ const https = require("https");
 const PROMPT_FILE = path.join(__dirname, "custom-prompt.txt");
 
 // Default prompt template
-const DEFAULT_PROMPT = `You are a technical assistant helping create a daily standup update. Analyze these git commits (organized by project) and blocker information to provide a summary in the following format:
+const DEFAULT_PROMPT = `You are a technical assistant helping create a daily standup update. Analyze git commits, Jira ticket details, active tickets, and blocker information to provide a comprehensive summary.
+
+You will receive for each project:
+1. Git commits with associated Jira ticket details (ticket ID, title, description, status, priority)
+2. List of all active "To Do" and "In Progress" Jira tickets assigned to the user (sorted by priority: Highest → High → Medium → Low → None)
+3. Blocker information
+
+Provide a summary in the EXACT following format:
 
 Blocker:
-   [Analyze the blocker information and determine which project(s) it affects. ONLY show projects that have actual blockers. If there are no blockers at all, just output "   • None". Do NOT list projects with "None" - only include projects that have real blockers]
-   
-   Project Name (only if it has blockers):
-   • [Project-specific blocker description]
+   None (or bullet points if blockers exist)
 
 Today's Update:
-   [For EACH project that has commits, create a section with project name and bullet points]
-   
-   Project Name 1:
-   • [Create bullet points from the git commits - each commit should be a concise bullet point describing what was done]
-   
-   Project Name 2:
-   • [Create bullet points for this project's commits]
+   PROJECT_NAME:
+   • Ticket-ID: Description of work done
 
 Tomorrow's Plan:
-   [Organize tomorrow's plan by project, suggesting next steps for each project based on today's commits]
-   
-   Project Name 1:
-   • [Based on this project's commits, suggest what might be the next logical steps]
-   
-   Project Name 2:
-   • [Based on this project's commits, suggest what might be the next logical steps]
+   PROJECT_NAME:
+   • Ticket-ID: Suggested next steps based on today's work and jira ticket priority
 
-Git commits organized by project:
-{COMMITS}
+DETAILED INSTRUCTIONS:
+
+1. BLOCKER SECTION:
+   - If no blockers: Write exactly "   None"
+   - If blockers exist: Add bullet points with project context if needed
+   - Do NOT create project sections unless there are actual blockers
+
+2. TODAY'S UPDATE SECTION:
+   - For EACH project that has commits, create a section with project name
+   - Format: PROJECT_NAME:
+   - Each bullet point must start with Ticket-ID followed by description
+   - Example: • KAN-123: Implemented user authentication logic
+   - Be concise and clear about what was accomplished
+
+3. TOMORROW'S PLAN SECTION:
+   - For EACH project, create a section with project name
+   - Format: PROJECT_NAME:
+   - PRIORITIZE by ticket priority (Highest → High → Medium → Low → None)
+   - Each bullet point must start with Ticket-ID followed by next action
+   - Consider both: work from today AND other active To Do/In Progress tickets
+   - Example: • KAN-456: Complete API integration and add error handling
+
+Data provided (includes git commits with Jira ticket details and active tickets):
+{PROJECT_DATA}
 
 Blocker information provided by user:
 {BLOCKERS}
 
-Important:
-- DO NOT use bold formatting (no ** or __) anywhere in the response
-- Use plain text only with proper indentation
-- For the Blocker section: ONLY list projects that have actual blockers. If no blockers at all, just write "   • None". Do NOT write "Project Name: • None" for projects without blockers. Only show project sections when there are real blockers for that project. Use proper indentation (3 spaces before the bullet).
-- For Today's Update: Create separate sections for EACH project. Use the exact project names from the commits above
-- For Tomorrow's Plan: Create separate sections for EACH project with next steps specific to that project's work
-- When creating bullet points for Today's Update, first search for ticket ID patterns (like AY1Q-T296, PROJ-123, etc.) in the git commit and include it at the start of the bullet point, followed by the description (Example: • AY1Q-T296: Fixed view creation logic)
-- Use bullet point character (•) for all lists (blockers, todays update and tomorrow's plan), not asterisks (*)
-- Keep all bullet points concise and professional
-- Focus on what was accomplished based on the commits for each project
-- Suggest logical next steps for Tomorrow's Plan specific to each project's context`;
+IMPORTANT RULES:
+- DO NOT use bold formatting (no ** or __) anywhere
+- Use plain text only with proper indentation (3 spaces before content)
+- Use bullet point character (•) for all lists, NOT asterisks (*)
+- Always start bullet points with Ticket-ID
+- Keep descriptions concise and actionable
+- Follow the EXACT structure shown above
+- Use exact project names from the data provided
+- For Blocker: Write "   None" if no blockers (NOT "• None")
+- Indentation: Project names have 3 spaces, bullet points have 3 spaces`;
 
 /**
  * Load custom prompt from file or use default
@@ -136,38 +151,78 @@ async function summarizeWithGemini(
   blockerInfo = "None"
 ) {
   try {
+    // STEP 1: Load the custom prompt template (or use default)
     const promptTemplate = loadPromptTemplate();
 
-    // Build commits text organized by project
-    let commitsText = "";
-    let projectNames = [];
+    // STEP 2: Store all project data in a structured variable
+    // This includes: git commits + Jira ticket details + active tickets
+    let projectDataText = "";
 
+    // Loop through each project and build comprehensive data
     for (const project of projectCommits) {
-      projectNames.push(project.projectName);
-      commitsText += `\n=== ${project.projectName} ===\n`;
-      commitsText += project.commits.join("\n");
-      commitsText += "\n";
+      projectDataText += `\n=== PROJECT: ${project.projectName} ===\n\n`;
+
+      // Store git commits with their associated Jira ticket details
+      if (project.commits && project.commits.length > 0) {
+        projectDataText += "GIT COMMITS WITH TICKET DETAILS:\n";
+        projectDataText += project.commits.join("\n");
+        projectDataText += "\n\n";
+      }
+
+      // Store all active Jira tickets (To Do and In Progress) sorted by priority
+      if (project.activeTickets && project.activeTickets.length > 0) {
+        projectDataText +=
+          "ACTIVE JIRA TICKETS (To Do & In Progress - Sorted by Priority):\n";
+        project.activeTickets.forEach((ticket) => {
+          projectDataText += `${ticket.key} [Status: ${ticket.status}] [Priority: ${ticket.priority}]\n`;
+          projectDataText += `  Title: ${ticket.summary}\n`;
+          projectDataText += `  Description: ${ticket.description}\n`;
+          projectDataText += `  Type: ${ticket.type}\n\n`;
+        });
+      }
+
+      projectDataText += "=".repeat(50) + "\n";
     }
 
-    // Replace placeholders with actual data
-    let prompt = promptTemplate.replace("{COMMITS}", commitsText);
-    prompt = prompt.replace("{PROJECT_NAMES}", projectNames.join(", "));
-    prompt = prompt.replace("{BLOCKERS}", blockerInfo);
+    // STEP 3: Create the final prompt by combining:
+    // - Custom prompt template
+    // - Stored project data (commits + tickets)
+    // - Blocker information
+    let finalPrompt = promptTemplate.replace("{PROJECT_DATA}", projectDataText);
+    finalPrompt = finalPrompt.replace("{BLOCKERS}", blockerInfo);
 
+    // Log the data being sent (optional - for debugging)
+    console.log("📊 Data Summary:");
+    console.log(`   - Projects: ${projectCommits.length}`);
+    const totalCommits = projectCommits.reduce(
+      (sum, p) => sum + (p.commits?.length || 0),
+      0
+    );
+    const totalTickets = projectCommits.reduce(
+      (sum, p) => sum + (p.activeTickets?.length || 0),
+      0
+    );
+    console.log(`   - Total Commits: ${totalCommits}`);
+    console.log(`   - Total Active Tickets: ${totalTickets}`);
+    console.log(`   - Blocker: ${blockerInfo}`);
+    console.log("");
+
+    // STEP 4: Prepare the request payload for Google Gemini LLM
     const postData = JSON.stringify({
       contents: [
         {
           parts: [
             {
-              text: prompt,
+              text: finalPrompt, // Send the complete prompt with all data
             },
           ],
         },
       ],
     });
 
-    // Use gemini-2.5-flash (fast and free tier available)
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
+    // STEP 5: Send request to Google Gemini API
+    // Using gemini-2.5-pro for better quality responses
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-pro:generateContent?key=${apiKey}`;
 
     const options = {
       method: "POST",
@@ -177,10 +232,15 @@ async function summarizeWithGemini(
       },
     };
 
-    const data = await makeHttpsRequest(url, options, postData);
-    const summary = data.candidates?.[0]?.content?.parts?.[0]?.text;
+    // STEP 6: Make the API call and get the response
+    const responseData = await makeHttpsRequest(url, options, postData);
 
-    return summary || null;
+    // STEP 7: Extract the AI-generated summary from response
+    const aiGeneratedSummary =
+      responseData.candidates?.[0]?.content?.parts?.[0]?.text;
+
+    // STEP 8: Return the final response
+    return aiGeneratedSummary || null;
   } catch (error) {
     if (error.data?.error?.message) {
       throw new Error(

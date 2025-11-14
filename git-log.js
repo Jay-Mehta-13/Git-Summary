@@ -4,7 +4,7 @@ const { execSync } = require("child_process");
 const path = require("path");
 const fs = require("fs");
 const readline = require("readline");
-const { fetchTicketDescription } = require("./ticket-api");
+const { fetchTicketDescription, fetchAllJiraTickets } = require("./ticket-api");
 const {
   summarizeWithGemini,
   displaySummary,
@@ -71,13 +71,19 @@ async function setupProject() {
     const jiraDomain = await prompt(
       "Enter Jira domain (e.g., your-domain.atlassian.net): "
     );
-    const jiraEmail = await prompt("Enter Jira email: ");
+    const jiraApiEmail = await prompt(
+      "Enter Jira API email (email of user who created the API token): "
+    );
     const jiraApiToken = await prompt("Enter Jira API token: ");
+    const jiraAssigneeEmail = await prompt(
+      "Enter assignee email (email to fetch assigned tickets for): "
+    );
 
     project.jira = {
       domain: jiraDomain,
-      email: jiraEmail,
+      apiEmail: jiraApiEmail,
       apiToken: jiraApiToken,
+      assigneeEmail: jiraAssigneeEmail,
     };
   }
 
@@ -161,6 +167,99 @@ function listProjects() {
   });
 }
 
+/**
+ * Fetch and display all Jira tickets for all projects
+ */
+async function fetchAllTickets() {
+  const config = loadConfig();
+
+  if (!config) {
+    console.error("❌ No configuration found. Please run initial setup first.");
+    console.log("💡 Run: node git-log.js --setup\n");
+    process.exit(1);
+  }
+
+  const projectsWithJira = config.projects.filter((p) => p.jira);
+
+  if (projectsWithJira.length === 0) {
+    console.log("\n⚠️  No projects with Jira configuration found.\n");
+    console.log(
+      "💡 Run: node git-log.js --add-project (to add a project with Jira)\n"
+    );
+    process.exit(0);
+  }
+
+  console.log("\n📋 Fetching Jira Tickets for All Projects");
+  console.log("═══════════════════════════════════════\n");
+
+  for (const project of projectsWithJira) {
+    console.log(`📁 Project: ${project.name}`);
+    console.log(
+      `   Assignee: ${project.jira.assigneeEmail || project.jira.email}`
+    );
+    console.log("───────────────────────────────────────");
+
+    try {
+      const tickets = await fetchAllJiraTickets(
+        project.jira,
+        project.jira.assigneeEmail || project.jira.email
+      );
+
+      if (tickets.length === 0) {
+        console.log(
+          '   ℹ️  No "To Do" or "In Progress" tickets found for this assignee\n'
+        );
+      } else {
+        console.log(
+          `   ✨ Found ${tickets.length} active ticket(s) (sorted by priority):\n`
+        );
+
+        tickets.forEach((ticket, index) => {
+          console.log(`   ${index + 1}. ${ticket.key}: ${ticket.summary}`);
+          console.log(`      ─────────────────────────────────────`);
+          console.log(`      Status: ${ticket.status}`);
+          console.log(`      Priority: ${ticket.priority}`);
+          console.log(`      Type: ${ticket.type}`);
+          console.log(`      Reporter: ${ticket.reporter}`);
+          console.log(
+            `      Created: ${new Date(ticket.created).toLocaleDateString()}`
+          );
+          console.log(
+            `      Updated: ${new Date(ticket.updated).toLocaleDateString()}`
+          );
+
+          if (ticket.labels && ticket.labels.length > 0) {
+            console.log(`      Labels: ${ticket.labels.join(", ")}`);
+          }
+
+          if (ticket.components && ticket.components.length > 0) {
+            console.log(`      Components: ${ticket.components.join(", ")}`);
+          }
+
+          console.log(`      Description:`);
+          // Wrap description text at 70 characters
+          const descWords = ticket.description.split(" ");
+          let line = "         ";
+          descWords.forEach((word) => {
+            if (line.length + word.length + 1 > 80) {
+              console.log(line);
+              line = "         " + word;
+            } else {
+              line += (line.endsWith("         ") ? "" : " ") + word;
+            }
+          });
+          if (line.trim()) console.log(line);
+          console.log("");
+        });
+      }
+    } catch (error) {
+      console.log(`   ❌ Error: ${error.message}\n`);
+    }
+  }
+
+  console.log("═══════════════════════════════════════\n");
+}
+
 (async () => {
   try {
     // Check for command line arguments
@@ -182,6 +281,12 @@ function listProjects() {
 
     if (args.includes("--list-projects") || args.includes("-l")) {
       listProjects();
+      rl.close();
+      process.exit(0);
+    }
+
+    if (args.includes("--fetch-tickets") || args.includes("-t")) {
+      await fetchAllTickets();
       rl.close();
       process.exit(0);
     }
@@ -209,6 +314,25 @@ function listProjects() {
       console.log(
         "  node git-log.js -l               Short version of --list-projects"
       );
+      console.log(
+        "  node git-log.js --fetch-tickets  Fetch all Jira tickets for all projects"
+      );
+      console.log(
+        "  node git-log.js -t               Short version of --fetch-tickets"
+      );
+      console.log(
+        '  node git-log.js --blocker "text" Skip blocker prompt, use provided text'
+      );
+      console.log(
+        '  node git-log.js -b "text"        Short version of --blocker'
+      );
+      console.log(
+        "  node git-log.js --blocker        Skip blocker prompt, no blocker (None)"
+      );
+      console.log(
+        '  node git-log.js --date "YYYY-MM-DD" Fetch commits for specific date'
+      );
+      console.log('  node git-log.js -d "YYYY-MM-DD"  Short version of --date');
       console.log("  node git-log.js --help           Show this help message");
       console.log(
         "  node git-log.js -h               Short version of --help\n"
@@ -239,7 +363,47 @@ function listProjects() {
       process.exit(1);
     }
 
-    const today = new Date();
+    // Check for --date flag
+    let targetDate = null;
+    let sinceDate = null;
+    let untilDate = null;
+
+    const dateFlagIndex = args.findIndex(
+      (arg) => arg === "--date" || arg === "-d"
+    );
+
+    if (dateFlagIndex !== -1 && dateFlagIndex + 1 < args.length) {
+      const dateString = args[dateFlagIndex + 1];
+
+      // Validate date format (YYYY-MM-DD)
+      const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+      if (!dateRegex.test(dateString)) {
+        console.error("❌ Error: Invalid date format. Use YYYY-MM-DD");
+        console.log('💡 Example: node git-log.js --date "2025-11-14"\n');
+        process.exit(1);
+      }
+
+      targetDate = new Date(dateString);
+
+      // Check if date is valid
+      if (isNaN(targetDate.getTime())) {
+        console.error("❌ Error: Invalid date provided");
+        console.log('💡 Example: node git-log.js --date "2025-11-14"\n');
+        process.exit(1);
+      }
+
+      // Set since and until dates for the specific day
+      sinceDate = dateString;
+
+      // Calculate next day for until
+      const nextDay = new Date(targetDate);
+      nextDay.setDate(nextDay.getDate() + 1);
+      untilDate = nextDay.toISOString().split("T")[0];
+
+      console.log(`📅 Fetching commits for date: ${dateString}\n`);
+    }
+
+    const today = targetDate || new Date();
 
     // Format date to: "Fri Nov 7 07:11:18 2025 +0000"
     const days = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -300,8 +464,14 @@ function listProjects() {
       const projectCommitDetails = [];
       const absolutePath = path.resolve(project.path);
 
-      // let gitCommand = `git log --oneline --since="yesterday"`;
-      let gitCommand = `git log --oneline --max-count=5`;
+      // Use custom date range if --date flag was provided, otherwise use midnight
+      let gitCommand;
+      if (sinceDate && untilDate) {
+        gitCommand = `git log --oneline --since="${sinceDate} 00:00" --until="${untilDate} 23:59"`;
+      } else {
+        // gitCommand = `git log --oneline --since="midnight"`;
+        gitCommand = `git log --oneline --max-count=5`;
+      }
       if (config.author) {
         gitCommand += ` --author="${config.author}"`;
       }
@@ -332,7 +502,9 @@ function listProjects() {
           console.log("   ✨ Commits:\n");
           totalCommitCount += commits.length;
 
-          // Store commits for AI processing but continue execution
+          // Store commits with full details for AI processing
+          const commitDetailsWithTickets = [];
+
           for (const commit of commits) {
             let ticketId = "No ticket ID";
 
@@ -349,8 +521,9 @@ function listProjects() {
               ? {
                   ...config,
                   jiraDomain: project.jira.domain,
-                  jiraEmail: project.jira.email,
+                  jiraEmail: project.jira.apiEmail || project.jira.email,
                   jiraApiToken: project.jira.apiToken,
+                  taskManagementSystem: "jira",
                 }
               : config;
 
@@ -362,22 +535,73 @@ function listProjects() {
             if (ticketInfo) {
               const displayLine = `      ${ticketId} | ${ticketInfo.title}`;
               console.log(displayLine);
+              console.log(
+                `      Status: ${ticketInfo.status} | Priority: ${ticketInfo.priority}`
+              );
               console.log(`      Description: ${ticketInfo.description}`);
-              console.log(`      ${commit}\n`);
+              console.log(`      Commit: ${commit}\n`);
+
+              // Store detailed commit info
+              commitDetailsWithTickets.push({
+                commit: commit,
+                ticketId: ticketId,
+                ticketTitle: ticketInfo.title,
+                ticketDescription: ticketInfo.description,
+                ticketStatus: ticketInfo.status,
+                ticketPriority: ticketInfo.priority,
+                ticketType: ticketInfo.type,
+              });
+
               projectCommitDetails.push(
-                `${ticketId} | ${ticketInfo.title} - ${commit}`
+                `${ticketId} [${ticketInfo.status}] [Priority: ${ticketInfo.priority}] | ${ticketInfo.title} - ${commit}`
               );
             } else {
               console.log(`      ${ticketId} | ${commit}\n`);
+              commitDetailsWithTickets.push({
+                commit: commit,
+                ticketId: ticketId,
+              });
               projectCommitDetails.push(commit);
             }
           }
 
-          // Store this project's commits
-          if (projectCommitDetails.length > 0) {
+          // Fetch all active Jira tickets (To Do and In Progress) for this project
+          let activeTickets = [];
+          if (project.jira) {
+            try {
+              console.log(
+                "   🔍 Fetching active Jira tickets (To Do & In Progress)...\n"
+              );
+              activeTickets = await fetchAllJiraTickets(
+                project.jira,
+                project.jira.assigneeEmail || project.jira.email
+              );
+
+              if (activeTickets.length > 0) {
+                console.log(
+                  `   ✨ Found ${activeTickets.length} active ticket(s) (sorted by priority):\n`
+                );
+                activeTickets.forEach((ticket) => {
+                  console.log(
+                    `      ${ticket.key} [${ticket.status}] [Priority: ${ticket.priority}]`
+                  );
+                  console.log(`      ${ticket.summary}\n`);
+                });
+              }
+            } catch (error) {
+              console.log(
+                `   ⚠️  Could not fetch active tickets: ${error.message}\n`
+              );
+            }
+          }
+
+          // Store this project's data with commits and active tickets
+          if (projectCommitDetails.length > 0 || activeTickets.length > 0) {
             projectCommits.push({
               projectName: project.name,
               commits: projectCommitDetails,
+              commitDetails: commitDetailsWithTickets,
+              activeTickets: activeTickets,
             });
           }
         }
@@ -394,34 +618,56 @@ function listProjects() {
 
     console.log("\n═══════════════════════════════════════");
 
-    // Ask about blockers
-    const rlBlocker = readline.createInterface({
-      input: process.stdin,
-      output: process.stdout,
-    });
-
-    const hasBlockers = await new Promise((resolve) => {
-      rlBlocker.question(
-        "\n🚧 Do you have any blockers? (yes/no): ",
-        (answer) => {
-          resolve(answer);
-        }
-      );
-    });
-
     let blockerInfo = "None";
-    if (
-      hasBlockers.toLowerCase() === "yes" ||
-      hasBlockers.toLowerCase() === "y"
-    ) {
-      blockerInfo = await new Promise((resolve) => {
-        rlBlocker.question("Please describe your blocker(s): ", (answer) => {
-          rlBlocker.close();
-          resolve(answer);
-        });
-      });
+
+    // Check if --blocker flag is provided
+    const blockerFlagIndex = args.findIndex(
+      (arg) => arg === "--blocker" || arg === "-b"
+    );
+
+    if (blockerFlagIndex !== -1) {
+      // Check if there's a description after the flag
+      if (
+        blockerFlagIndex + 1 < args.length &&
+        !args[blockerFlagIndex + 1].startsWith("-")
+      ) {
+        // Use the provided description as blocker
+        blockerInfo = args[blockerFlagIndex + 1];
+        console.log(`\n🚧 Blocker provided: ${blockerInfo}`);
+      } else {
+        // No description provided, default to "None"
+        blockerInfo = "None";
+        console.log("\n🚧 No blocker description provided, using: None");
+      }
     } else {
-      rlBlocker.close();
+      // Ask about blockers interactively
+      const rlBlocker = readline.createInterface({
+        input: process.stdin,
+        output: process.stdout,
+      });
+
+      const hasBlockers = await new Promise((resolve) => {
+        rlBlocker.question(
+          "\n🚧 Do you have any blockers? (yes/no): ",
+          (answer) => {
+            resolve(answer);
+          }
+        );
+      });
+
+      if (
+        hasBlockers.toLowerCase() === "yes" ||
+        hasBlockers.toLowerCase() === "y"
+      ) {
+        blockerInfo = await new Promise((resolve) => {
+          rlBlocker.question("Please describe your blocker(s): ", (answer) => {
+            rlBlocker.close();
+            resolve(answer);
+          });
+        });
+      } else {
+        rlBlocker.close();
+      }
     }
 
     // Start AI summary generation

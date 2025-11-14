@@ -51,16 +51,20 @@ A Node.js script that generates professional daily standup reports from your git
 
 ## Commands
 
-| Command                                   | Description                                   |
-| ----------------------------------------- | --------------------------------------------- |
-| `node git-log.js`                         | Run with existing config                      |
-| `node git-log.js --setup` or `-s`         | Reset config and run setup wizard             |
-| `node git-log.js --add-project` or `-a`   | Add a new project to existing config          |
-| `node git-log.js --list-projects` or `-l` | List all configured projects                  |
-| `node git-log.js --help` or `-h`          | Show help message                             |
-| `node test-api.js`                        | Test Gemini API key and list available models |
+| Command                                    | Description                                      |
+| ------------------------------------------ | ------------------------------------------------ |
+| `node git-log.js`                          | Run with existing config                         |
+| `node git-log.js --setup` or `-s`          | Reset config and run setup wizard                |
+| `node git-log.js --add-project` or `-a`    | Add a new project to existing config             |
+| `node git-log.js --list-projects` or `-l`  | List all configured projects                     |
+| `node git-log.js --fetch-tickets` or `-t`  | Fetch all active Jira tickets for all projects   |
+| `node git-log.js --blocker "text"` or `-b` | Skip blocker prompt, use provided text or "None" |
+| `node git-log.js --help` or `-h`           | Show help message                                |
+| `node test-api.js`                         | Test Gemini API key and list available models    |
 
 ## Daily Usage
+
+### Interactive Mode (Default)
 
 1. **Start of your workday**: Run the script to generate your standup report
 
@@ -78,6 +82,32 @@ A Node.js script that generates professional daily standup reports from your git
 4. **Get AI summary**: Wait a few seconds for the AI-generated standup report
 
 5. **Copy the summary**: Use the formatted output for your daily standup meeting or Slack update
+
+### Quick Mode with Blocker Flag
+
+Skip the interactive blocker prompt by using the `--blocker` flag:
+
+**No blockers:**
+
+```bash
+node git-log.js --blocker
+# or
+node git-log.js -b
+```
+
+**With blocker description:**
+
+```bash
+node git-log.js --blocker "Waiting for API access from client"
+# or
+node git-log.js -b "Waiting for API access from client"
+```
+
+This is useful for:
+
+- Automation scripts or CI/CD pipelines
+- Quick standup generation when you know you have no blockers
+- Pre-filling blocker information without interactive prompts
 
 ## Configuration
 
@@ -105,11 +135,12 @@ Each project in the `projects` array has the following structure:
 
 Each project can have its own Jira configuration:
 
-| Field      | Description                                                                                             |
-| ---------- | ------------------------------------------------------------------------------------------------------- |
-| `domain`   | Your Jira domain (e.g., `company.atlassian.net`)                                                        |
-| `email`    | Email for your Jira account                                                                             |
-| `apiToken` | Generate from [Atlassian Account Security](https://id.atlassian.com/manage-profile/security/api-tokens) |
+| Field           | Description                                                                                             |
+| --------------- | ------------------------------------------------------------------------------------------------------- |
+| `domain`        | Your Jira domain (e.g., `company.atlassian.net`)                                                        |
+| `apiEmail`      | Email of the user who created the API token (used for authentication)                                   |
+| `apiToken`      | Generate from [Atlassian Account Security](https://id.atlassian.com/manage-profile/security/api-tokens) |
+| `assigneeEmail` | Email of the user whose tickets you want to fetch (used in JQL queries)                                 |
 
 ### Example Config Structure
 
@@ -123,8 +154,9 @@ Each project can have its own Jira configuration:
       "path": "/home/user/projects/project-a",
       "jira": {
         "domain": "company.atlassian.net",
-        "email": "john@company.com",
-        "apiToken": "your-jira-token"
+        "apiEmail": "admin@company.com",
+        "apiToken": "your-jira-token",
+        "assigneeEmail": "john@company.com"
       }
     },
     {
@@ -156,6 +188,69 @@ View all configured projects:
 
 ```bash
 node git-log.js --list-projects
+```
+
+### Fetching Jira Tickets
+
+View all active Jira tickets across all projects:
+
+```bash
+node git-log.js --fetch-tickets
+```
+
+or use the short version:
+
+```bash
+node git-log.js -t
+```
+
+This command will:
+
+- Fetch all **"In Progress"** tickets assigned to the configured user
+- Show comprehensive details for each ticket including:
+  - Ticket key, summary, status, priority, and type
+  - Reporter name and creation date
+  - Last updated date
+  - Labels and components (if any)
+  - Full description with word wrapping for readability
+- Display results organized by project
+
+**Example output:**
+
+```
+📋 Fetching Jira Tickets for All Projects
+═══════════════════════════════════════
+
+📁 Project: SIMGROW
+   Assignee: john.doe@company.com
+───────────────────────────────────────
+   ✨ Found 2 "In Progress" ticket(s):
+
+   1. PROJ-123: Implement user authentication
+      ─────────────────────────────────────
+      Status: In Progress
+      Priority: High
+      Type: Story
+      Reporter: Jane Smith
+      Created: 11/10/2025
+      Updated: 11/14/2025
+      Labels: backend, security
+      Components: Authentication Module
+      Description:
+         Need to implement OAuth 2.0 authentication flow for the
+         application. Should support multiple providers including
+         Google and GitHub.
+
+   2. PROJ-124: Fix login bug
+      ─────────────────────────────────────
+      Status: In Progress
+      Priority: Medium
+      Type: Bug
+      Reporter: John Doe
+      Created: 11/12/2025
+      Updated: 11/13/2025
+      Description:
+         Users unable to login with special characters in password.
 ```
 
 ### Multi-Project Workflow

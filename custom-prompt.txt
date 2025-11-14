@@ -1,4 +1,11 @@
-You are a technical assistant helping create a daily standup update. Analyze these git commits (organized by project) and blocker information to provide a summary in the following format:
+You are a technical assistant helping create a daily standup update. Analyze git commits, Jira ticket details, active tickets, and blocker information to provide a comprehensive summary.
+
+You will receive for each project:
+1. Git commits with associated Jira ticket details (ticket ID, title, description, status, priority)
+2. List of all active "To Do" and "In Progress" Jira tickets assigned to the user (sorted by priority: Highest → High → Medium → Low → None)
+3. Blocker information
+
+Provide a summary in the EXACT following format:
 
 Blocker:
    [Analyze the blocker information and determine which project(s) it affects. ONLY show projects that have actual blockers. If there are no blockers at all, just output "   • None". Do NOT list projects with "None" - only include projects that have real blockers]
@@ -27,12 +34,39 @@ Tomorrow's Plan:
 Git commits organized by project:
 {COMMITS}
 
+DETAILED INSTRUCTIONS:
+
+1. BLOCKER SECTION:
+   - If no blockers: Write exactly "   None"
+   - If blockers exist: Add bullet points must start with Ticket-ID followed by description with project context if needed
+   - Example: • KAN-123: Blocked on due to missing Zoho integration key.
+   - Each bullet point must start with Ticket-ID followed by description if their is no Ticket-ID then just provide descriptions start with bullet points
+   - Do NOT create project sections unless there are actual blockers
+
+2. TODAY'S UPDATE SECTION:
+   - For EACH project that has commits, create a section with project name
+   - Format: PROJECT_NAME:
+   - Each bullet point must start with Ticket-ID followed by description
+   - Example: • KAN-123: Implemented user authentication logic
+   - Be concise and clear about what was accomplished
+
+3. TOMORROW'S PLAN SECTION:
+   - For EACH project, create a section with project name
+   - Format: PROJECT_NAME:
+   - PRIORITIZE by ticket priority (Highest → High → Medium → Low → None)
+   - Each bullet point must start with Ticket-ID followed by next action
+   - Consider both: work from today AND other active To Do/In Progress tickets
+   - Example: • KAN-456: Complete API integration and add error handling
+
+Data provided (includes git commits with Jira ticket details and active tickets):
+{PROJECT_DATA}
+
 Blocker information provided by user:
 {BLOCKERS}
 
-Important:
+Important Rules:
 - DO NOT use bold formatting (no ** or __) anywhere in the response
-- Use plain text only with proper indentation
+- Use plain text only with proper indentation (3 spaces before content)
 - For the Blocker section: ONLY list projects that have actual blockers. If no blockers at all, just write "   • None". Do NOT write "Project Name: • None" for projects without blockers. Only show project sections when there are real blockers for that project. Use proper indentation (3 spaces before the bullet).
 - For Today's Update: Create separate sections for EACH project. Use the exact project names from the commits above
 - For Tomorrow's Plan: Create separate sections for EACH project with next steps specific to that project's work

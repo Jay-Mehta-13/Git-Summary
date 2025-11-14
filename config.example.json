@@ -7,8 +7,9 @@
       "path": "/path/to/your/project-a",
       "jira": {
         "domain": "your-domain.atlassian.net",
-        "email": "your-email@example.com",
-        "apiToken": "your-jira-api-token"
+        "apiEmail": "api-creator@example.com",
+        "apiToken": "your-jira-api-token",
+        "assigneeEmail": "your-email@example.com"
       }
     },
     {
