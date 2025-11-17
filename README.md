@@ -1,6 +1,6 @@
 # Git Summary - Daily Standup Report Generator
 
-A Node.js script that generates professional daily standup reports from your git commits using AI-powered summarization with Google Gemini.
+A Node.js script that generates professional daily standup reports from your git commits using AI-powered summarization with Google Gemini or OpenAI ChatGPT.
 
 ## Features
 
@@ -9,11 +9,13 @@ A Node.js script that generates professional daily standup reports from your git
 - 📁 **Multi-project support** - Track commits across multiple repositories
 - 🎫 Extracts ticket IDs from commit messages (Jira support)
 - 📋 Fetches ticket title and description from Jira (optional per project)
-- 🤖 AI-powered commit summaries using Google Gemini 2.5 Flash
+- 🤖 **Dual AI support** - Choose between Google Gemini or OpenAI ChatGPT
+- 🔄 **Switch LLMs anytime** - Easily switch between AI providers
 - 🚧 Interactive blocker tracking
-- ✏️ Customizable AI prompts
+- ✏️ Customizable AI prompts (shared across both LLMs)
 - 🔧 Interactive setup wizard
 - 📊 Formatted daily standup reports
+- 📅 **Date-specific reports** - Fetch commits for any specific date
 - 🎯 No external packages required (uses native Node.js modules)
 
 ## Quick Start
@@ -27,7 +29,10 @@ A Node.js script that generates professional daily standup reports from your git
 2. Follow the interactive setup wizard to configure:
 
    - Git author name (used across all projects)
-   - Gemini API key (required) - Get from [Google AI Studio](https://makersuite.google.com/app/apikey)
+   - **Choose your AI provider**: Gemini (Google) or ChatGPT (OpenAI)
+   - API key for your chosen provider:
+     - Gemini: Get from [Google AI Studio](https://makersuite.google.com/app/apikey)
+     - ChatGPT: Get from [OpenAI Platform](https://platform.openai.com/api-keys)
    - First project details:
      - Project name (e.g., "SIMGROW")
      - Project path (absolute path to your git repository)
@@ -51,16 +56,18 @@ A Node.js script that generates professional daily standup reports from your git
 
 ## Commands
 
-| Command                                    | Description                                      |
-| ------------------------------------------ | ------------------------------------------------ |
-| `node git-log.js`                          | Run with existing config                         |
-| `node git-log.js --setup` or `-s`          | Reset config and run setup wizard                |
-| `node git-log.js --add-project` or `-a`    | Add a new project to existing config             |
-| `node git-log.js --list-projects` or `-l`  | List all configured projects                     |
-| `node git-log.js --fetch-tickets` or `-t`  | Fetch all active Jira tickets for all projects   |
-| `node git-log.js --blocker "text"` or `-b` | Skip blocker prompt, use provided text or "None" |
-| `node git-log.js --help` or `-h`           | Show help message                                |
-| `node test-api.js`                         | Test Gemini API key and list available models    |
+| Command                                       | Description                                      |
+| --------------------------------------------- | ------------------------------------------------ |
+| `node git-log.js`                             | Run with existing config                         |
+| `node git-log.js --setup` or `-s`             | Reset config and run setup wizard                |
+| `node git-log.js --add-project` or `-a`       | Add a new project to existing config             |
+| `node git-log.js --list-projects` or `-l`     | List all configured projects                     |
+| `node git-log.js --fetch-tickets` or `-t`     | Fetch all active Jira tickets for all projects   |
+| `node git-log.js --blocker "text"` or `-b`    | Skip blocker prompt, use provided text or "None" |
+| `node git-log.js --date "YYYY-MM-DD"` or `-d` | Fetch commits for a specific date                |
+| `node git-log.js --switch-llm` or `-llm`      | Switch between Gemini and ChatGPT                |
+| `node git-log.js --help` or `-h`              | Show help message                                |
+| `node test-api.js`                            | Test Gemini API key and list available models    |
 
 ## Daily Usage
 
@@ -109,17 +116,50 @@ This is useful for:
 - Quick standup generation when you know you have no blockers
 - Pre-filling blocker information without interactive prompts
 
+### Date-Specific Reports
+
+Fetch commits for a specific date instead of "since yesterday":
+
+```bash
+node git-log.js --date "2025-11-14"
+# or
+node git-log.js -d "2025-11-14"
+```
+
+**Format:** Use `YYYY-MM-DD` format
+
+**Use Cases:**
+
+- Generate retrospective reports for past dates
+- Catch up on missed standup days
+- Review work done on specific dates for timesheets
+- Create reports for days you were on leave
+
+**Example:**
+
+```bash
+# Generate report for November 14, 2025
+node git-log.js --date "2025-11-14"
+
+# Combine with blocker flag
+node git-log.js --date "2025-11-14" --blocker
+```
+
+The tool will fetch commits from the specified date (00:00:00) to the next day (00:00:00), giving you a complete daily report.
+
 ## Configuration
 
 Configuration is automatically created during setup in `config.json`.
 
 ### Global Configuration
 
-| Field                  | Description                                                                                   | Required |
-| ---------------------- | --------------------------------------------------------------------------------------------- | -------- |
-| `author`               | Your git author name for filtering commits (applies to all projects)                          | Yes      |
-| `geminiApiKey`         | Google Gemini API key (get from [Google AI Studio](https://makersuite.google.com/app/apikey)) | Yes      |
-| `customTicketPatterns` | Array of regex patterns for custom ticket formats                                             | No       |
+| Field                  | Description                                                                                   | Required         |
+| ---------------------- | --------------------------------------------------------------------------------------------- | ---------------- |
+| `author`               | Your git author name for filtering commits (applies to all projects)                          | Yes              |
+| `llmProvider`          | AI provider: `"gemini"` or `"chatgpt"` (default: `"gemini"`)                                  | Yes              |
+| `geminiApiKey`         | Google Gemini API key (get from [Google AI Studio](https://makersuite.google.com/app/apikey)) | If using Gemini  |
+| `chatgptApiKey`        | OpenAI API key (get from [OpenAI Platform](https://platform.openai.com/api-keys))             | If using ChatGPT |
+| `customTicketPatterns` | Array of regex patterns for custom ticket formats                                             | No               |
 
 ### Project Configuration
 
@@ -147,7 +187,9 @@ Each project can have its own Jira configuration:
 ```json
 {
   "author": "John Doe",
-  "geminiApiKey": "your-api-key-here",
+  "llmProvider": "gemini",
+  "geminiApiKey": "your-gemini-api-key-here",
+  "chatgptApiKey": "your-chatgpt-api-key-here",
   "projects": [
     {
       "name": "Project A",
@@ -168,6 +210,36 @@ Each project can have its own Jira configuration:
   "setupDate": "2025-01-01T00:00:00.000Z"
 }
 ```
+
+**Note:** You only need to configure the API key for the LLM provider you're using. However, having both keys configured allows you to easily switch between providers using the `--switch-llm` flag.
+
+## Switching Between AI Providers
+
+You can easily switch between Google Gemini and OpenAI ChatGPT at any time:
+
+```bash
+node git-log.js --switch-llm
+# or
+node git-log.js -llm
+```
+
+The tool will:
+
+1. Show your current LLM provider
+2. Prompt you to choose between Gemini or ChatGPT
+3. Check if the API key exists for your chosen provider
+4. Ask for the API key if not already configured
+5. Update your configuration
+
+### Why Switch?
+
+- **Gemini (Google)**: Fast, cost-effective, good for daily standup reports
+- **ChatGPT (OpenAI)**: Higher quality summaries, better context understanding
+- **Try Both**: Compare output quality and choose what works best for your team
+
+### Custom Prompts Work with Both
+
+The `custom-prompt.txt` file is shared between both AI providers, so your customized prompt template will work regardless of which LLM you choose.
 
 ## Managing Multiple Projects
 
@@ -446,7 +518,9 @@ Tomorrow's Plan:
 
 ```
 ├── git-log.js              # Main script - entry point
+├── llm-service.js          # Unified LLM interface (routes to Gemini or ChatGPT)
 ├── gemini-service.js       # Gemini AI integration (uses native https module)
+├── chatgpt-service.js      # ChatGPT AI integration (uses native https module)
 ├── ticket-api.js           # Jira API integration
 ├── test-api.js             # API key testing utility
 ├── config.json             # Your configuration (auto-generated, gitignored)
@@ -458,11 +532,13 @@ Tomorrow's Plan:
 ### Key Files
 
 - **git-log.js**: Main script that orchestrates the entire flow
-- **gemini-service.js**: Handles AI summarization using Google Gemini 2.5 Flash
+- **llm-service.js**: Unified interface that routes to the correct AI provider
+- **gemini-service.js**: Handles AI summarization using Google Gemini 2.5 Pro
+- **chatgpt-service.js**: Handles AI summarization using OpenAI GPT-4
 - **ticket-api.js**: Fetches ticket details from Jira (optional)
 - **test-api.js**: Utility to test your Gemini API key and list available models
 - **config.json**: Stores your configuration (created during setup)
-- **custom-prompt.txt**: Customizable prompt template for AI summarization
+- **custom-prompt.txt**: Customizable prompt template for AI summarization (shared by both LLMs)
 
 ## Troubleshooting
 
@@ -473,19 +549,27 @@ Tomorrow's Plan:
 - Check `author` filter matches your git author name exactly
 - Try running `git log --since="yesterday" --author="YourName"` manually in your project directory
 
-### Gemini API errors
+### AI API errors
 
-#### "Model not found" error
+#### Gemini "Model not found" error
 
 - Run `node test-api.js` to verify your API key and see available models
-- The tool uses `gemini-2.5-flash` model by default
+- The tool uses `gemini-2.5-pro` model by default
 - Ensure you have a valid API key from [Google AI Studio](https://makersuite.google.com/app/apikey)
+
+#### ChatGPT Authentication error
+
+- Verify your OpenAI API key is correct
+- Get or regenerate your key from [OpenAI Platform](https://platform.openai.com/api-keys)
+- The tool uses `gpt-4o` model
 
 #### Quota exceeded
 
-- Check your API quota at [Google AI Studio](https://makersuite.google.com/)
+- **Gemini**: Check your API quota at [Google AI Studio](https://makersuite.google.com/)
+- **ChatGPT**: Check your usage at [OpenAI Platform](https://platform.openai.com/usage)
 - Free tier has rate limits; wait a few minutes and retry
 - Consider upgrading your API plan if needed
+- **Alternative**: Switch to the other LLM provider using `node git-log.js --switch-llm`
 
 ### Jira API calls failing
 

@@ -6,10 +6,10 @@ const fs = require("fs");
 const readline = require("readline");
 const { fetchTicketDescription, fetchAllJiraTickets } = require("./ticket-api");
 const {
-  summarizeWithGemini,
+  summarizeWithLLM,
   displaySummary,
   createDefaultPromptFile,
-} = require("./gemini-service");
+} = require("./llm-service");
 
 const CONFIG_FILE = path.join(__dirname, "config.json");
 
@@ -102,18 +102,47 @@ async function setupConfig() {
   // Author
   config.author = await prompt("Enter your git author name: ");
 
-  // Gemini API Key (Mandatory)
-  console.log("\n🤖 AI Configuration (Required):");
-  let geminiApiKey = "";
-  while (!geminiApiKey.trim()) {
-    geminiApiKey = await prompt("Enter your Gemini API key (required): ");
-    if (!geminiApiKey.trim()) {
-      console.log(
-        "❌ Gemini API key is mandatory. Please provide a valid key."
-      );
+  // AI/LLM Configuration
+  console.log("\n🤖 AI Configuration:");
+  console.log("Choose your preferred LLM provider:");
+  console.log("1. Gemini (Google)");
+  console.log("2. ChatGPT (OpenAI)");
+
+  let llmChoice = "";
+  while (!["1", "2"].includes(llmChoice)) {
+    llmChoice = await prompt("Enter your choice (1 or 2): ");
+    if (!["1", "2"].includes(llmChoice)) {
+      console.log("❌ Invalid choice. Please enter 1 or 2.");
     }
   }
-  config.geminiApiKey = geminiApiKey.trim();
+
+  if (llmChoice === "1") {
+    config.llmProvider = "gemini";
+    console.log("\n✓ Selected: Gemini");
+    let geminiApiKey = "";
+    while (!geminiApiKey.trim()) {
+      geminiApiKey = await prompt("Enter your Gemini API key: ");
+      if (!geminiApiKey.trim()) {
+        console.log(
+          "❌ Gemini API key is required. Please provide a valid key."
+        );
+      }
+    }
+    config.geminiApiKey = geminiApiKey.trim();
+  } else {
+    config.llmProvider = "chatgpt";
+    console.log("\n✓ Selected: ChatGPT");
+    let chatgptApiKey = "";
+    while (!chatgptApiKey.trim()) {
+      chatgptApiKey = await prompt("Enter your OpenAI API key: ");
+      if (!chatgptApiKey.trim()) {
+        console.log(
+          "❌ OpenAI API key is required. Please provide a valid key."
+        );
+      }
+    }
+    config.chatgptApiKey = chatgptApiKey.trim();
+  }
 
   // Add first project
   console.log("\n📁 Project Configuration:");
@@ -165,6 +194,81 @@ function listProjects() {
     console.log(`   Jira: ${project.jira ? "✓ Enabled" : "✗ Disabled"}`);
     console.log("");
   });
+}
+
+/**
+ * Switch between LLM providers (Gemini <-> ChatGPT)
+ */
+async function switchLLM() {
+  const config = loadConfig();
+
+  if (!config) {
+    console.error("❌ No configuration found. Please run initial setup first.");
+    console.log("💡 Run: node git-log.js --setup\n");
+    process.exit(1);
+  }
+
+  const currentProvider = config.llmProvider || "gemini";
+  console.log(`\n🔄 Current LLM Provider: ${currentProvider.toUpperCase()}\n`);
+
+  console.log("Choose your preferred LLM provider:");
+  console.log("1. Gemini (Google)");
+  console.log("2. ChatGPT (OpenAI)");
+
+  let llmChoice = "";
+  while (!["1", "2"].includes(llmChoice)) {
+    llmChoice = await prompt("Enter your choice (1 or 2): ");
+    if (!["1", "2"].includes(llmChoice)) {
+      console.log("❌ Invalid choice. Please enter 1 or 2.");
+    }
+  }
+
+  if (llmChoice === "1") {
+    config.llmProvider = "gemini";
+    console.log("\n✓ Switched to: Gemini");
+
+    // Check if API key exists, if not ask for it
+    if (!config.geminiApiKey || !config.geminiApiKey.trim()) {
+      console.log("⚠️  Gemini API key not found in config");
+      let geminiApiKey = "";
+      while (!geminiApiKey.trim()) {
+        geminiApiKey = await prompt("Enter your Gemini API key: ");
+        if (!geminiApiKey.trim()) {
+          console.log(
+            "❌ Gemini API key is required. Please provide a valid key."
+          );
+        }
+      }
+      config.geminiApiKey = geminiApiKey.trim();
+    } else {
+      console.log("✓ Using existing Gemini API key");
+    }
+  } else {
+    config.llmProvider = "chatgpt";
+    console.log("\n✓ Switched to: ChatGPT");
+
+    // Check if API key exists, if not ask for it
+    if (!config.chatgptApiKey || !config.chatgptApiKey.trim()) {
+      console.log("⚠️  ChatGPT API key not found in config");
+      let chatgptApiKey = "";
+      while (!chatgptApiKey.trim()) {
+        chatgptApiKey = await prompt("Enter your OpenAI API key: ");
+        if (!chatgptApiKey.trim()) {
+          console.log(
+            "❌ OpenAI API key is required. Please provide a valid key."
+          );
+        }
+      }
+      config.chatgptApiKey = chatgptApiKey.trim();
+    } else {
+      console.log("✓ Using existing OpenAI API key");
+    }
+  }
+
+  saveConfig(config);
+  console.log(
+    `\n✅ LLM provider switched to ${config.llmProvider.toUpperCase()}!\n`
+  );
 }
 
 /**
@@ -291,6 +395,12 @@ async function fetchAllTickets() {
       process.exit(0);
     }
 
+    if (args.includes("--switch-llm") || args.includes("-llm")) {
+      await switchLLM();
+      rl.close();
+      process.exit(0);
+    }
+
     if (args.includes("--help") || args.includes("-h")) {
       console.log("\n📚 Git Summary Tool - Usage:\n");
       console.log(
@@ -333,6 +443,12 @@ async function fetchAllTickets() {
         '  node git-log.js --date "YYYY-MM-DD" Fetch commits for specific date'
       );
       console.log('  node git-log.js -d "YYYY-MM-DD"  Short version of --date');
+      console.log(
+        "  node git-log.js --switch-llm     Switch between Gemini and ChatGPT"
+      );
+      console.log(
+        "  node git-log.js -llm             Short version of --switch-llm"
+      );
       console.log("  node git-log.js --help           Show this help message");
       console.log(
         "  node git-log.js -h               Short version of --help\n"
@@ -357,10 +473,25 @@ async function fetchAllTickets() {
       process.exit(1);
     }
 
-    if (!config.geminiApiKey) {
-      console.error("❌ Error: Gemini API key is not configured");
-      console.log("💡 Run 'node git-log.js --setup' to configure it\n");
-      process.exit(1);
+    // Validate LLM API key based on provider
+    const llmProvider = config.llmProvider || "gemini";
+
+    if (llmProvider === "gemini") {
+      if (!config.geminiApiKey || !config.geminiApiKey.trim()) {
+        console.error("❌ Error: Gemini API key is not configured");
+        console.log(
+          "💡 Run 'node git-log.js --setup' or 'node git-log.js --switch-llm' to configure it\n"
+        );
+        process.exit(1);
+      }
+    } else if (llmProvider === "chatgpt") {
+      if (!config.chatgptApiKey || !config.chatgptApiKey.trim()) {
+        console.error("❌ Error: ChatGPT API key is not configured");
+        console.log(
+          "💡 Run 'node git-log.js --setup' or 'node git-log.js --switch-llm' to configure it\n"
+        );
+        process.exit(1);
+      }
     }
 
     // Check for --date flag
@@ -671,17 +802,18 @@ async function fetchAllTickets() {
     }
 
     // Start AI summary generation
-    console.log("\n🤖 Generating AI summary...");
+    console.log("");
 
     // Process AI summary - execution continues while waiting
     try {
-      const summary = await summarizeWithGemini(
+      const summary = await summarizeWithLLM(
         projectCommits,
-        config.geminiApiKey,
+        config,
         blockerInfo
       );
       if (summary) {
-        displaySummary(summary);
+        const provider = config.llmProvider || "gemini";
+        displaySummary(summary, provider);
       } else {
         console.log("⚠️  No summary generated\n");
       }

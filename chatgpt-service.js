@@ -4,7 +4,7 @@ const https = require("https");
 
 const PROMPT_FILE = path.join(__dirname, "custom-prompt.txt");
 
-// Default prompt template
+// Default prompt template (shared with Gemini)
 const DEFAULT_PROMPT = `You are a technical assistant helping create a daily standup update. Analyze git commits, Jira ticket details, active tickets, and blocker information to provide a comprehensive summary.
 
 You will receive for each project:
@@ -82,26 +82,23 @@ function loadPromptTemplate() {
 }
 
 /**
- * Create default prompt file if it doesn't exist
- */
-function createDefaultPromptFile() {
-  if (!fs.existsSync(PROMPT_FILE)) {
-    fs.writeFileSync(PROMPT_FILE, DEFAULT_PROMPT);
-    console.log(`✅ Created custom prompt template at: ${PROMPT_FILE}`);
-    console.log("💡 You can edit this file to customize the AI prompt\n");
-  }
-}
-
-/**
  * Make HTTPS request (no external packages needed)
- * @param {string} url - The URL to request
+ * @param {string} hostname - The hostname
+ * @param {string} path - The path
  * @param {Object} options - Request options
  * @param {string} postData - POST data
  * @returns {Promise<Object>} - Response data
  */
-function makeHttpsRequest(url, options, postData) {
+function makeHttpsRequest(hostname, path, options, postData) {
   return new Promise((resolve, reject) => {
-    const req = https.request(url, options, (res) => {
+    const requestOptions = {
+      hostname,
+      path,
+      method: options.method,
+      headers: options.headers,
+    };
+
+    const req = https.request(requestOptions, (res) => {
       let data = "";
 
       res.on("data", (chunk) => {
@@ -139,84 +136,105 @@ function makeHttpsRequest(url, options, postData) {
 }
 
 /**
- * Make a single API call to Gemini with a specific model
- * @param {string} model - Model name (e.g., "gemini-2.5-pro" or "gemini-2.5-flash")
- * @param {string} apiKey - Gemini API key
+ * Make a single API call to ChatGPT with a specific model
+ * @param {string} model - Model name (e.g., "gpt-4o-mini", "gpt-3.5-turbo")
+ * @param {string} apiKey - OpenAI API key
  * @param {string} finalPrompt - Complete prompt to send
  * @returns {Promise<string|null>} - AI generated summary or null
  */
-async function callGeminiAPI(model, apiKey, finalPrompt) {
+async function callChatGPTAPI(model, apiKey, finalPrompt) {
   const postData = JSON.stringify({
-    contents: [
+    model: model,
+    messages: [
       {
-        parts: [
-          {
-            text: finalPrompt,
-          },
-        ],
+        role: "user",
+        content: finalPrompt,
       },
     ],
+    temperature: 0.7,
   });
-
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
 
   const options = {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
+      Authorization: `Bearer ${apiKey}`,
       "Content-Length": Buffer.byteLength(postData),
     },
   };
 
-  const responseData = await makeHttpsRequest(url, options, postData);
-  const aiGeneratedSummary =
-    responseData.candidates?.[0]?.content?.parts?.[0]?.text;
+  const responseData = await makeHttpsRequest(
+    "api.openai.com",
+    "/v1/chat/completions",
+    options,
+    postData
+  );
 
+  const aiGeneratedSummary = responseData.choices?.[0]?.message?.content;
   return aiGeneratedSummary || null;
 }
 
 /**
- * Check if error should trigger retry (not rate limit or auth errors)
+ * Check if error should trigger retry or model fallback
  * @param {Error} error - The error object
- * @returns {boolean} - True if should retry
+ * @returns {Object} - {shouldRetry: boolean, shouldFallback: boolean}
  */
-function shouldRetry(error) {
+function analyzeError(error) {
   const errorMessage = error.message || error.toString();
   const errorData = error.data?.error?.message || "";
+  const errorCode = error.data?.error?.code || "";
 
-  // Don't retry for rate limit errors
+  // Don't retry for quota/billing errors
+  if (
+    errorMessage.toLowerCase().includes("quota") ||
+    errorMessage.toLowerCase().includes("billing") ||
+    errorData.toLowerCase().includes("quota") ||
+    errorData.toLowerCase().includes("billing") ||
+    errorCode === "insufficient_quota"
+  ) {
+    return { shouldRetry: false, shouldFallback: false };
+  }
+
+  // Don't retry for invalid API key
+  if (
+    errorMessage.toLowerCase().includes("invalid api key") ||
+    errorMessage.toLowerCase().includes("unauthorized") ||
+    errorData.toLowerCase().includes("invalid api key") ||
+    errorCode === "invalid_api_key"
+  ) {
+    return { shouldRetry: false, shouldFallback: false };
+  }
+
+  // Model not found or not available - try fallback models
+  if (
+    errorMessage.toLowerCase().includes("model") ||
+    errorData.toLowerCase().includes("model") ||
+    errorCode === "model_not_found"
+  ) {
+    return { shouldRetry: false, shouldFallback: true };
+  }
+
+  // Rate limit - don't retry immediately
   if (
     errorMessage.toLowerCase().includes("rate limit") ||
-    errorMessage.toLowerCase().includes("quota") ||
     errorData.toLowerCase().includes("rate limit") ||
-    errorData.toLowerCase().includes("quota")
+    errorCode === "rate_limit_exceeded"
   ) {
-    return false;
+    return { shouldRetry: false, shouldFallback: false };
   }
 
-  // Don't retry for unauthorized/authentication errors
-  if (
-    errorMessage.toLowerCase().includes("unauthorized") ||
-    errorMessage.toLowerCase().includes("invalid api key") ||
-    errorMessage.toLowerCase().includes("authentication") ||
-    errorData.toLowerCase().includes("unauthorized") ||
-    errorData.toLowerCase().includes("invalid api key")
-  ) {
-    return false;
-  }
-
-  // Retry for all other errors
-  return true;
+  // Retry for all other errors (network, timeout, server errors)
+  return { shouldRetry: true, shouldFallback: true };
 }
 
 /**
- * Summarize commits using Gemini API with retry mechanism
+ * Summarize commits using ChatGPT API with retry mechanism and model fallback
  * @param {Array} projectCommits - Array of objects with {projectName, commits: []}
- * @param {string} apiKey - Gemini API key
+ * @param {string} apiKey - OpenAI API key
  * @param {string} blockerInfo - Blocker information from user
  * @returns {Promise<string|null>} - AI generated summary or null
  */
-async function summarizeWithGemini(
+async function summarizeWithChatGPT(
   projectCommits,
   apiKey,
   blockerInfo = "None"
@@ -258,26 +276,43 @@ async function summarizeWithGemini(
   finalPrompt = finalPrompt.replace("{BLOCKERS}", blockerInfo);
 
   // STEP 4: Retry mechanism with model fallback
+  // Try different models in order of preference
   const retrySequence = [
-    { model: "gemini-2.5-pro", attempt: 1 },
-    { model: "gemini-2.5-pro", attempt: 2 },
-    { model: "gemini-2.5-flash", attempt: 1 },
-    { model: "gemini-2.5-flash", attempt: 2 },
-    { model: "gemini-2.5-pro", attempt: 3 }, // Final attempt with pro
+    {
+      model: "gpt-4o-mini",
+      attempt: 1,
+      description: "GPT-4o Mini (Cost-effective)",
+    },
+    { model: "gpt-4o-mini", attempt: 2, description: "GPT-4o Mini (Retry)" },
+    {
+      model: "gpt-3.5-turbo",
+      attempt: 1,
+      description: "GPT-3.5 Turbo (Fallback)",
+    },
+    {
+      model: "gpt-3.5-turbo",
+      attempt: 2,
+      description: "GPT-3.5 Turbo (Retry)",
+    },
+    {
+      model: "gpt-4o-mini",
+      attempt: 3,
+      description: "GPT-4o Mini (Final attempt)",
+    },
   ];
 
   let lastError = null;
 
   for (let i = 0; i < retrySequence.length; i++) {
-    const { model, attempt } = retrySequence[i];
+    const { model, attempt, description } = retrySequence[i];
 
     try {
       // Log retry attempts (except first attempt)
       if (i > 0) {
-        console.log(`🔄 Retrying with model: ${model} (Attempt ${attempt})...`);
+        console.log(`🔄 Retrying with ${description}...`);
       }
 
-      const summary = await callGeminiAPI(model, apiKey, finalPrompt);
+      const summary = await callChatGPTAPI("gpt-4o-mini", apiKey, finalPrompt);
 
       // If successful, return immediately
       if (summary) {
@@ -289,24 +324,23 @@ async function summarizeWithGemini(
     } catch (error) {
       lastError = error;
 
-      // Check if we should retry
-      if (!shouldRetry(error)) {
-        // Don't retry for rate limit or auth errors
+      // Analyze the error
+      const { shouldRetry, shouldFallback } = analyzeError(error);
+
+      // If we shouldn't retry at all, throw immediately
+      if (!shouldRetry && !shouldFallback) {
         const errorMsg = error.data?.error?.message || error.message;
-        throw new Error(`Gemini API error: ${errorMsg}`);
+        throw new Error(`ChatGPT API error: ${errorMsg}`);
       }
 
       // Log the error for this attempt
-      console.log(
-        `⚠️  Attempt ${i + 1} failed with ${model}: ${error.statusMessage}. ${
-          error.data.error.message
-        }`
-      );
+      const errorMsg = error.data?.error?.message || error.message;
+      console.log(`⚠️  Attempt ${i + 1} failed with ${model}: ${errorMsg}`);
 
       // If this is not the last attempt, continue to next retry
       if (i < retrySequence.length - 1) {
-        // Small delay before retry (500ms)
-        await new Promise((resolve) => setTimeout(resolve, 500));
+        // Small delay before retry (1 second)
+        await new Promise((resolve) => setTimeout(resolve, 1000));
         continue;
       }
     }
@@ -316,7 +350,7 @@ async function summarizeWithGemini(
   if (lastError) {
     if (lastError.data?.error?.message) {
       throw new Error(
-        `Gemini API error after ${retrySequence.length} attempts: ${lastError.statusMessage} - ${lastError.data.error.message}`
+        `ChatGPT API error after ${retrySequence.length} attempts: ${lastError.statusMessage} - ${lastError.data.error.message}`
       );
     }
     throw new Error(
@@ -326,21 +360,8 @@ async function summarizeWithGemini(
 
   throw new Error("Failed to generate AI summary: No response received");
 }
-/**
- * Display the AI summary in a formatted box
- * @param {string} summary - The AI generated summary
- */
-function displaySummary(summary) {
-  console.log("\n═══════════════════════════════════════");
-  console.log("🤖 AI Summary");
-  console.log("═══════════════════════════════════════");
-  console.log(summary);
-  console.log("═══════════════════════════════════════\n");
-}
 
 module.exports = {
-  summarizeWithGemini,
-  displaySummary,
-  createDefaultPromptFile,
+  summarizeWithChatGPT,
   loadPromptTemplate,
 };
