@@ -7,11 +7,10 @@ const readline = require('readline');
 const {
   fetchTicketDescription,
   fetchAllJiraTickets,
-} = require('./task-management/jira');
+} = require('./task-management/jira-service');
 const { summarizeWithLLM, displaySummary } = require('./llm/llm-service');
-const { loadConfig, setupConfig } = require('./config');
+const { loadConfig, setupConfig, CONFIG_FILE } = require('./config');
 const { rl } = require('./utils');
-
 /**
  * Fetch and display all Jira tickets for all projects
  */
@@ -110,40 +109,9 @@ async function fetchAllTickets() {
     // Check for command line arguments
     const args = process.argv.slice(2);
 
-    if (args.includes('--setup') || args.includes('-s')) {
-      // Force setup by deleting existing config
-      if (fs.existsSync(CONFIG_FILE)) {
-        fs.unlinkSync(CONFIG_FILE);
-        console.log('🗑️  Existing configuration deleted.\n');
-      }
-    }
-
-    if (args.includes('--add-project') || args.includes('-a')) {
-      await addProject();
-      rl.close();
-      process.exit(0);
-    }
-
-    if (args.includes('--list-projects') || args.includes('-l')) {
-      listProjects();
-      rl.close();
-      process.exit(0);
-    }
-
-    if (args.includes('--fetch-tickets') || args.includes('-t')) {
-      await fetchAllTickets();
-      rl.close();
-      process.exit(0);
-    }
-
-    if (args.includes('--switch-llm') || args.includes('-llm')) {
-      await switchLLM();
-      rl.close();
-      process.exit(0);
-    }
-
-    if (args.includes('--help') || args.includes('-h')) {
-      console.log('\n📚 Git Summary Tool - Usage:\n');
+    // Check help first before any other flags
+    if (args.includes("--help") || args.includes("-h")) {
+      console.log("\n📚 Git Summary Tool - Usage:\n");
       console.log(
         '  node git-log.js                  Run the tool with existing config'
       );
@@ -194,6 +162,38 @@ async function fetchAllTickets() {
       console.log(
         '  node git-log.js -h               Short version of --help\n'
       );
+      process.exit(0);
+    }
+
+    if (args.includes("--setup") || args.includes("-s")) {
+      // Force setup by deleting existing config
+      if (fs.existsSync(CONFIG_FILE)) {
+        fs.unlinkSync(CONFIG_FILE);
+        console.log("🗑️  Existing configuration deleted.\n");
+      }
+    }
+
+    if (args.includes("--add-project") || args.includes("-a")) {
+      await addProject();
+      rl.close();
+      process.exit(0);
+    }
+
+    if (args.includes("--list-projects") || args.includes("-l")) {
+      listProjects();
+      rl.close();
+      process.exit(0);
+    }
+
+    if (args.includes("--fetch-tickets") || args.includes("-t")) {
+      await fetchAllTickets();
+      rl.close();
+      process.exit(0);
+    }
+
+    if (args.includes("--switch-llm") || args.includes("-llm")) {
+      await switchLLM();
+      rl.close();
       process.exit(0);
     }
 
@@ -304,12 +304,12 @@ async function fetchAllTickets() {
 
     const formattedDate = `${dayName} ${monthName} ${date} ${hours}:${minutes}:${seconds} ${year} +0000`;
 
-    console.log('\n📊 Git Activity Report');
-    console.log('═══════════════════════════════════════');
-    console.log(`� Author: ${config.author}`);
-    console.log(`� Date: ${formattedDate}`);
-    console.log(`� Projects: ${config.projects.length}`);
-    console.log('═══════════════════════════════════════\n');
+    console.log("\n📊 Git Activity Report");
+    console.log("═══════════════════════════════════════");
+    console.log(`👤 Author: ${config.author}`);
+    console.log(`📅 Date: ${formattedDate}`);
+    console.log(`📖 Projects: ${config.projects.length}`);
+    console.log("═══════════════════════════════════════\n");
 
     // Collect commits per project
     const projectCommits = []; // Array of {projectName, commits: []}
@@ -403,6 +403,7 @@ async function fetchAllTickets() {
               ticketId,
               jiraConfig
             );
+            console.log("🚀 ~ ticketInfo:", ticketInfo);
 
             if (ticketInfo) {
               const displayLine = `      ${ticketId} | ${ticketInfo.title}`;

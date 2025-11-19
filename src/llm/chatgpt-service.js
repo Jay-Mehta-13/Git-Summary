@@ -1,6 +1,5 @@
-const fs = require('fs');
-const path = require('path');
-const https = require('https');
+const fs = require("fs");
+const path = require("path");
 
 const PROMPT_FILE = path.join(__dirname, 'custom-prompt.txt');
 
@@ -82,57 +81,37 @@ function loadPromptTemplate() {
 }
 
 /**
- * Make HTTPS request (no external packages needed)
- * @param {string} hostname - The hostname
- * @param {string} path - The path
+ * Make request using fetch
+ * @param {string} url - The URL to request
  * @param {Object} options - Request options
  * @param {string} postData - POST data
  * @returns {Promise<Object>} - Response data
  */
-function makeHttpsRequest(hostname, path, options, postData) {
-  return new Promise((resolve, reject) => {
-    const requestOptions = {
-      hostname,
-      path,
+async function makeRequest(url, options, postData) {
+  try {
+    const response = await fetch(url, {
       method: options.method,
       headers: options.headers,
-    };
-
-    const req = https.request(requestOptions, res => {
-      let data = '';
-
-      res.on('data', chunk => {
-        data += chunk;
-      });
-
-      res.on('end', () => {
-        try {
-          const jsonData = JSON.parse(data);
-          if (res.statusCode >= 200 && res.statusCode < 300) {
-            resolve(jsonData);
-          } else {
-            reject({
-              statusCode: res.statusCode,
-              statusMessage: res.statusMessage,
-              data: jsonData,
-            });
-          }
-        } catch (error) {
-          reject(new Error(`Failed to parse response: ${error.message}`));
-        }
-      });
+      body: postData,
     });
 
-    req.on('error', error => {
-      reject(error);
-    });
+    const jsonData = await response.json();
 
-    if (postData) {
-      req.write(postData);
+    if (response.ok) {
+      return jsonData;
+    } else {
+      throw {
+        statusCode: response.status,
+        statusMessage: response.statusText,
+        data: jsonData,
+      };
     }
-
-    req.end();
-  });
+  } catch (error) {
+    if (error.statusCode) {
+      throw error;
+    }
+    throw new Error(`Failed to make request: ${error.message}`);
+  }
 }
 
 /**
@@ -159,16 +138,11 @@ async function callChatGPTAPI(model, apiKey, finalPrompt) {
     headers: {
       'Content-Type': 'application/json',
       Authorization: `Bearer ${apiKey}`,
-      'Content-Length': Buffer.byteLength(postData),
     },
   };
 
-  const responseData = await makeHttpsRequest(
-    'api.openai.com',
-    '/v1/chat/completions',
-    options,
-    postData
-  );
+  const url = "https://api.openai.com/v1/chat/completions";
+  const responseData = await makeRequest(url, options, postData);
 
   const aiGeneratedSummary = responseData.choices?.[0]?.message?.content;
   return aiGeneratedSummary || null;
