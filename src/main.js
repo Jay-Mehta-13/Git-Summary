@@ -7,11 +7,10 @@ const readline = require('readline');
 const {
   fetchTicketDescription,
   fetchAllJiraTickets,
-} = require('./task-management/jira');
+} = require('./task-management/jira-service');
 const { summarizeWithLLM, displaySummary } = require('./llm/llm-service');
-const { loadConfig, setupConfig } = require('./config');
+const { loadConfig, setupConfig, CONFIG_FILE } = require('./config');
 const { rl } = require('./utils');
-
 /**
  * Fetch and display all Jira tickets for all projects
  */

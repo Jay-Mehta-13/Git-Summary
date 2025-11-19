@@ -1,7 +1,6 @@
 const path = require('path');
 const { prompt } = require('./utils');
 const fs = require('fs');
-const { setupZohoIntegration } = require("./zoho-service");
 const CONFIG_FILE = path.join(__dirname, '../config.json');
 
 // Function to load config
@@ -71,6 +70,8 @@ async function setupProject() {
 
 // Function to run initial setup
 async function setupConfig() {
+  const { setupZohoIntegration } = require("./task-management/zoho-service");
+
   console.log("\n🔧 First-time setup - Let's configure your environment\n");
 
   const config = {
@@ -290,4 +291,5 @@ module.exports = {
   setupConfig,
   addProject,
   listProjects,
+  CONFIG_FILE
 };

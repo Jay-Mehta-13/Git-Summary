@@ -1,22 +1,6 @@
 const fs = require("fs");
 const path = require("path");
-
-const CONFIG_FILE = path.join(__dirname, "config.json");
-
-/**
- * Load configuration from config.json
- */
-function loadConfig() {
-  try {
-    if (fs.existsSync(CONFIG_FILE)) {
-      const data = fs.readFileSync(CONFIG_FILE, "utf-8");
-      return JSON.parse(data);
-    }
-  } catch (error) {
-    console.error("❌ Error reading config file:", error.message);
-  }
-  return null;
-}
+const { loadConfig, CONFIG_FILE } = require("../config");
 
 /**
  * Make POST request to Zoho OAuth API using fetch
