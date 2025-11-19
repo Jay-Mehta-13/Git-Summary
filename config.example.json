@@ -1,6 +1,8 @@
 {
   "author": "Your Name",
+  "llmProvider": "gemini",
   "geminiApiKey": "your-gemini-api-key-here",
+  "chatgptApiKey": "your-chatgpt-api-key-here",
   "projects": [
     {
       "name": "Project A",
@@ -10,6 +12,22 @@
         "apiEmail": "api-creator@example.com",
         "apiToken": "your-jira-api-token",
         "assigneeEmail": "your-email@example.com"
+      },
+      "zoho": {
+        "generatedCode": "your-zoho-generated-code",
+        "clientId": "your-zoho-client-id",
+        "clientSecret": "your-zoho-client-secret",
+        "portalId": "your-portal-id",
+        "projects": [
+          {
+            "project_id": "123456789",
+            "name": "Project A - Development"
+          },
+          {
+            "project_id": "987654321",
+            "name": "Project A - Testing"
+          }
+        ]
       }
     },
     {

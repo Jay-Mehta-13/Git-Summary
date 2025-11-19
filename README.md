@@ -37,6 +37,7 @@ A Node.js script that generates professional daily standup reports from your git
      - Project name (e.g., "SIMGROW")
      - Project path (absolute path to your git repository)
      - Jira integration (optional per project)
+     - Zoho integration (optional per project)
 
 3. The script will automatically create:
 
@@ -170,6 +171,7 @@ Each project in the `projects` array has the following structure:
 | `name` | Project name (displayed in reports)   | Yes      |
 | `path` | Absolute path to git repository       | Yes      |
 | `jira` | Jira configuration object (see below) | No       |
+| `zoho` | Zoho configuration object (see below) | No       |
 
 ### Jira Configuration (Optional per Project)
 
@@ -181,6 +183,22 @@ Each project can have its own Jira configuration:
 | `apiEmail`      | Email of the user who created the API token (used for authentication)                                   |
 | `apiToken`      | Generate from [Atlassian Account Security](https://id.atlassian.com/manage-profile/security/api-tokens) |
 | `assigneeEmail` | Email of the user whose tickets you want to fetch (used in JQL queries)                                 |
+
+### Zoho Configuration (Optional per Project)
+
+Each project can have its own Zoho configuration:
+
+| Field           | Description                                                                     |
+| --------------- | ------------------------------------------------------------------------------- |
+| `generatedCode` | OAuth grant code from Zoho API Console (expires in 10 minutes, single use only) |
+| `clientId`      | Your Zoho Self Client ID                                                        |
+| `clientSecret`  | Your Zoho Self Client Secret                                                    |
+
+**⚠️ Important Notes:**
+
+- The generated code expires in 10 minutes after generation
+- The generated code can only be used once to obtain a refresh token
+- See the detailed guide below on how to generate these credentials
 
 ### Example Config Structure
 
@@ -203,7 +221,12 @@ Each project can have its own Jira configuration:
     },
     {
       "name": "Project B",
-      "path": "/home/user/projects/project-b"
+      "path": "/home/user/projects/project-b",
+      "zoho": {
+        "generatedCode": "1000.xxxxxxxxxx.xxxxxxxxxx",
+        "clientId": "1000.XXXXXXXXXXXXX",
+        "clientSecret": "xxxxxxxxxxxxxxxxxxxxx"
+      }
     }
   ],
   "customTicketPatterns": [],
@@ -601,6 +624,141 @@ If you need to start over:
 ```bash
 node git-log.js --setup
 ```
+
+## ✅ Guide: How to Generate Zoho OAuth Code (Self Client)
+
+This guide explains how to generate the grant code, which is required to create a refresh token and access Zoho APIs programmatically.
+
+### 🔹 Step 1 — Login to Zoho API Console
+
+Go to:
+
+```
+https://api-console.zoho.com/
+```
+
+Login using the **SAME Zoho account** that has access to your Zoho Projects data.
+
+### 🔹 Step 2 — Go to "Client Secrets"
+
+In the left menu:
+
+```
+API Console → Client Secret
+```
+
+**If you already created a client:**
+
+- Open it
+
+**If not:**
+
+1. Click **Add Client**
+2. Select **Self Client**
+3. Enter:
+   - **Client Name**: (anything you want, e.g., "Git Summary Tool")
+   - **Homepage URL**: (optional, leave blank if not needed)
+   - **Redirect URLs**: (leave blank)
+4. Click **Create**
+
+You will now get:
+
+- **Client ID**
+- **Client Secret**
+
+### 🔹 Step 3 — Open the "Self Client" Tab
+
+Inside your client:
+
+1. Click **Self Client** tab
+2. You will see a large textbox labelled **Scope**
+
+### 🔹 Step 4 — Paste Required Scopes
+
+Paste your selected Zoho Projects scopes (space-separated):
+
+```
+ZohoProjects.portals.READ ZohoProjects.projects.ALL ZohoProjects.milestones.ALL ZohoProjects.tasklists.ALL ZohoProjects.tasks.ALL ZohoProjects.timesheets.ALL ZohoProjects.bugs.ALL ZohoProjects.documents.ALL ZohoProjects.events.ALL ZohoProjects.forums.ALL ZohoProjects.users.ALL ZohoProjects.calendar.ALL ZohoProjects.search.READ ZohoProjects.templates.ALL ZohoProjects.customfields.ALL ZohoProjects.tags.ALL
+```
+
+**Important:**
+
+- ✔ No commas
+- ✔ No plus signs
+- ✔ No line breaks
+- ✔ SPACE between scopes
+
+### 🔹 Step 5 — Select "Time Duration"
+
+Zoho allows:
+
+- **Minimum**: 3 minutes
+- **Maximum**: 10 minutes
+
+**Always choose 10 minutes** (gives you more time).
+
+### 🔹 Step 6 — Click "Generate Code"
+
+Zoho will now generate a grant code.
+
+**Example:**
+
+```
+1000.xxxxxxxxxxxxxxxxx.xxxxxxxxxxxxxxxx
+```
+
+**⚠️ Important:**
+
+- This code is valid **ONLY** for the selected time (10 minutes).
+- It **cannot be reused**.
+
+### 🔹 Step 7 — Copy Credentials
+
+Now copy the following three values:
+
+1. **Generated Code** (from the Grant Token field)
+
+   - Example: `1000.xxxxxxxxxxxxxxxxx.xxxxxxxxxxxxxxxx`
+   - Valid for 10 minutes only
+
+2. **Client ID** (from the client details at the top)
+
+   - Example: `1000.XXXXXXXXXXXXX`
+
+3. **Client Secret** (from the client details at the top)
+   - Example: `xxxxxxxxxxxxxxxxxxxxx`
+
+### 🔹 Step 8 — Paste in Setup
+
+When running `node git-log.js --setup` or `node git-log.js --add-project`, paste these values when prompted:
+
+```bash
+Do you use Zoho for this project? (yes/no): yes
+
+📊 Zoho Configuration:
+ℹ️  You need to generate OAuth credentials from Zoho API Console
+📖 See README.md for detailed instructions on generating these credentials
+
+Enter Zoho generated code (grant code from Self Client): 1000.xxxxxxxxxxxxxxxxx.xxxxxxxxxxxxxxxx
+Enter Zoho client ID: 1000.XXXXXXXXXXXXX
+Enter Zoho client secret: xxxxxxxxxxxxxxxxxxxxx
+
+✅ Zoho configuration saved!
+⚠️  Note: The generated code expires in 10 minutes and can only be used once.
+```
+
+### 📝 Additional Notes
+
+- **Grant Code Expiry**: The generated code must be used within 10 minutes
+- **Single Use**: After using the code to get a refresh token, you cannot reuse it
+- **Refresh Token**: Your application will use the generated code to obtain a refresh token, which can be used indefinitely
+- **Scopes**: Make sure to include all scopes you need; you cannot add scopes later without regenerating
+
+### 🔗 Useful Links
+
+- [Zoho API Console](https://api-console.zoho.com/)
+- [Zoho OAuth Documentation](https://www.zoho.com/projects/help/rest-api/oauth-steps.html)
+- [Zoho Projects API Scopes](https://www.zoho.com/projects/help/rest-api/oauth-scopes.html)
 
 ## Technical Details
 

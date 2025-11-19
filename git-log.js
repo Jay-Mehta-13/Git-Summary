@@ -10,6 +10,7 @@ const {
   displaySummary,
   createDefaultPromptFile,
 } = require("./llm-service");
+const { setupZohoIntegration } = require("./zoho-service");
 
 const CONFIG_FILE = path.join(__dirname, "config.json");
 
@@ -144,15 +145,120 @@ async function setupConfig() {
     config.chatgptApiKey = chatgptApiKey.trim();
   }
 
-  // Add first project
-  console.log("\n📁 Project Configuration:");
-  const firstProject = await setupProject();
-  config.projects.push(firstProject);
+  // Ask about multiple projects
+  console.log("\n════════════════════════════════════════════════════");
+  console.log("📁 Project Configuration:");
+  console.log("════════════════════════════════════════════════════\n");
+  const multipleProjects = await prompt(
+    "Are you working on multiple projects? (yes/no): "
+  );
+
+  // Add projects
+  if (
+    multipleProjects.toLowerCase() === "yes" ||
+    multipleProjects.toLowerCase() === "y"
+  ) {
+    console.log("\n✓ Let's add all your projects\n");
+
+    let addMoreProjects = true;
+    let projectCount = 1;
+
+    while (addMoreProjects) {
+      console.log(`────────────────────────────────────────────────────`);
+      console.log(`📦 Project #${projectCount}:`);
+      console.log(`────────────────────────────────────────────────────\n`);
+      const project = await setupProject();
+
+      config.projects.push(project);
+      projectCount++;
+
+      // Ask if they want to add more
+      const addMore = await prompt(
+        "\nDo you want to add another project? (yes/no): "
+      );
+      addMoreProjects =
+        addMore.toLowerCase() === "yes" || addMore.toLowerCase() === "y";
+    }
+
+    console.log(
+      `\n✅ Added ${config.projects.length} projects successfully!\n`
+    );
+  } else {
+    // Add single project
+    console.log("\n✓ Let's set up your project\n");
+    console.log(`────────────────────────────────────────────────────\n`);
+    const firstProject = await setupProject();
+
+    config.projects.push(firstProject);
+  }
+
+  // Ask about Zoho after all projects are configured
+  console.log("\n════════════════════════════════════════════════════");
+  console.log("📊 Zoho Projects Integration:");
+  console.log("════════════════════════════════════════════════════\n");
+
+  const useZoho = await prompt("Do you use Zoho Projects? (yes/no): ");
+
+  let zohoSetupNeeded = false;
+  let zohoCredentials = null;
+
+  if (useZoho.toLowerCase() === "yes" || useZoho.toLowerCase() === "y") {
+    console.log("\n✓ Let's configure Zoho integration\n");
+    console.log(
+      "ℹ️  You need to generate OAuth credentials from Zoho API Console"
+    );
+    console.log(
+      "📖 See README.md for detailed instructions on generating these credentials\n"
+    );
+
+    const generatedCode = await prompt(
+      "Enter Zoho generated code (grant code from Self Client): "
+    );
+    const clientId = await prompt("Enter Zoho client ID: ");
+    const clientSecret = await prompt("Enter Zoho client secret: ");
+
+    zohoSetupNeeded = true;
+    zohoCredentials = {
+      generatedCode: generatedCode.trim(),
+      clientId: clientId.trim(),
+      clientSecret: clientSecret.trim(),
+    };
+
+    console.log("\n✅ Zoho credentials collected!");
+    console.log(
+      "⚠️  Note: The generated code expires in 10 minutes and can only be used once.\n"
+    );
+  }
 
   config.setupDate = new Date().toISOString();
 
+  // If Zoho credentials were provided, store them in config
+  if (zohoSetupNeeded && zohoCredentials) {
+    config.zoho = zohoCredentials;
+  }
+
   // Save config
   saveConfig(config);
+
+  // Run Zoho setup if credentials were provided
+  if (zohoSetupNeeded && zohoCredentials) {
+    console.log("\n════════════════════════════════════════════════════");
+    console.log("🔄 Setting up Zoho integration...");
+    console.log("════════════════════════════════════════════════════\n");
+
+    const zohoSetupResult = await setupZohoIntegration();
+
+    if (zohoSetupResult) {
+      console.log("\n🎉 Zoho integration setup completed successfully!\n");
+      console.log("════════════════════════════════════════════════════\n");
+    } else {
+      console.log(
+        "\n⚠️  Zoho setup encountered issues. You can retry later with a fresh generated code.\n"
+      );
+      console.log("════════════════════════════════════════════════════\n");
+    }
+  }
+
   return config;
 }
 
@@ -165,12 +271,16 @@ async function addProject() {
     process.exit(1);
   }
 
-  console.log("\n➕ Adding a new project\n");
+  console.log("\n════════════════════════════════════════════════════");
+  console.log("➕ Adding a new project");
+  console.log("════════════════════════════════════════════════════\n");
+
   const newProject = await setupProject();
+
   config.projects.push(newProject);
 
   saveConfig(config);
-  console.log(`✅ Project "${newProject.name}" added successfully!\n`);
+  console.log(`\n✅ Project "${newProject.name}" added successfully!\n`);
 }
 
 // Function to list all projects
@@ -369,38 +479,7 @@ async function fetchAllTickets() {
     // Check for command line arguments
     const args = process.argv.slice(2);
 
-    if (args.includes("--setup") || args.includes("-s")) {
-      // Force setup by deleting existing config
-      if (fs.existsSync(CONFIG_FILE)) {
-        fs.unlinkSync(CONFIG_FILE);
-        console.log("🗑️  Existing configuration deleted.\n");
-      }
-    }
-
-    if (args.includes("--add-project") || args.includes("-a")) {
-      await addProject();
-      rl.close();
-      process.exit(0);
-    }
-
-    if (args.includes("--list-projects") || args.includes("-l")) {
-      listProjects();
-      rl.close();
-      process.exit(0);
-    }
-
-    if (args.includes("--fetch-tickets") || args.includes("-t")) {
-      await fetchAllTickets();
-      rl.close();
-      process.exit(0);
-    }
-
-    if (args.includes("--switch-llm") || args.includes("-llm")) {
-      await switchLLM();
-      rl.close();
-      process.exit(0);
-    }
-
+    // Check help first before any other flags
     if (args.includes("--help") || args.includes("-h")) {
       console.log("\n📚 Git Summary Tool - Usage:\n");
       console.log(
@@ -453,6 +532,38 @@ async function fetchAllTickets() {
       console.log(
         "  node git-log.js -h               Short version of --help\n"
       );
+      process.exit(0);
+    }
+
+    if (args.includes("--setup") || args.includes("-s")) {
+      // Force setup by deleting existing config
+      if (fs.existsSync(CONFIG_FILE)) {
+        fs.unlinkSync(CONFIG_FILE);
+        console.log("🗑️  Existing configuration deleted.\n");
+      }
+    }
+
+    if (args.includes("--add-project") || args.includes("-a")) {
+      await addProject();
+      rl.close();
+      process.exit(0);
+    }
+
+    if (args.includes("--list-projects") || args.includes("-l")) {
+      listProjects();
+      rl.close();
+      process.exit(0);
+    }
+
+    if (args.includes("--fetch-tickets") || args.includes("-t")) {
+      await fetchAllTickets();
+      rl.close();
+      process.exit(0);
+    }
+
+    if (args.includes("--switch-llm") || args.includes("-llm")) {
+      await switchLLM();
+      rl.close();
       process.exit(0);
     }
 
@@ -565,9 +676,9 @@ async function fetchAllTickets() {
 
     console.log("\n📊 Git Activity Report");
     console.log("═══════════════════════════════════════");
-    console.log(`� Author: ${config.author}`);
-    console.log(`� Date: ${formattedDate}`);
-    console.log(`� Projects: ${config.projects.length}`);
+    console.log(`👤 Author: ${config.author}`);
+    console.log(`📅 Date: ${formattedDate}`);
+    console.log(`📖 Projects: ${config.projects.length}`);
     console.log("═══════════════════════════════════════\n");
 
     // Collect commits per project
@@ -662,6 +773,7 @@ async function fetchAllTickets() {
               ticketId,
               jiraConfig
             );
+            console.log("🚀 ~ ticketInfo:", ticketInfo);
 
             if (ticketInfo) {
               const displayLine = `      ${ticketId} | ${ticketInfo.title}`;

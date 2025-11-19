@@ -1,6 +1,5 @@
 const fs = require("fs");
 const path = require("path");
-const https = require("https");
 
 const PROMPT_FILE = path.join(__dirname, "custom-prompt.txt");
 
@@ -93,49 +92,37 @@ function createDefaultPromptFile() {
 }
 
 /**
- * Make HTTPS request (no external packages needed)
+ * Make request using fetch
  * @param {string} url - The URL to request
  * @param {Object} options - Request options
  * @param {string} postData - POST data
  * @returns {Promise<Object>} - Response data
  */
-function makeHttpsRequest(url, options, postData) {
-  return new Promise((resolve, reject) => {
-    const req = https.request(url, options, (res) => {
-      let data = "";
-
-      res.on("data", (chunk) => {
-        data += chunk;
-      });
-
-      res.on("end", () => {
-        try {
-          const jsonData = JSON.parse(data);
-          if (res.statusCode >= 200 && res.statusCode < 300) {
-            resolve(jsonData);
-          } else {
-            reject({
-              statusCode: res.statusCode,
-              statusMessage: res.statusMessage,
-              data: jsonData,
-            });
-          }
-        } catch (error) {
-          reject(new Error(`Failed to parse response: ${error.message}`));
-        }
-      });
+async function makeRequest(url, options, postData) {
+  try {
+    const response = await fetch(url, {
+      method: options.method,
+      headers: options.headers,
+      body: postData,
     });
 
-    req.on("error", (error) => {
-      reject(error);
-    });
+    const jsonData = await response.json();
 
-    if (postData) {
-      req.write(postData);
+    if (response.ok) {
+      return jsonData;
+    } else {
+      throw {
+        statusCode: response.status,
+        statusMessage: response.statusText,
+        data: jsonData,
+      };
     }
-
-    req.end();
-  });
+  } catch (error) {
+    if (error.statusCode) {
+      throw error;
+    }
+    throw new Error(`Failed to make request: ${error.message}`);
+  }
 }
 
 /**
@@ -164,11 +151,10 @@ async function callGeminiAPI(model, apiKey, finalPrompt) {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      "Content-Length": Buffer.byteLength(postData),
     },
   };
 
-  const responseData = await makeHttpsRequest(url, options, postData);
+  const responseData = await makeRequest(url, options, postData);
   const aiGeneratedSummary =
     responseData.candidates?.[0]?.content?.parts?.[0]?.text;
 
