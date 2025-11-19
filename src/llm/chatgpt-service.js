@@ -1,7 +1,7 @@
 const fs = require("fs");
 const path = require("path");
 
-const PROMPT_FILE = path.join(__dirname, "custom-prompt.txt");
+const PROMPT_FILE = path.join(__dirname, 'custom-prompt.txt');
 
 // Default prompt template (shared with Gemini)
 const DEFAULT_PROMPT = `You are a technical assistant helping create a daily standup update. Analyze git commits, Jira ticket details, active tickets, and blocker information to provide a comprehensive summary.
@@ -69,13 +69,13 @@ IMPORTANT RULES:
 function loadPromptTemplate() {
   try {
     if (fs.existsSync(PROMPT_FILE)) {
-      const customPrompt = fs.readFileSync(PROMPT_FILE, "utf-8");
+      const customPrompt = fs.readFileSync(PROMPT_FILE, 'utf-8');
       if (customPrompt.trim()) {
         return customPrompt;
       }
     }
   } catch (error) {
-    console.warn("⚠️  Could not load custom prompt, using default");
+    console.warn('⚠️  Could not load custom prompt, using default');
   }
   return DEFAULT_PROMPT;
 }
@@ -126,7 +126,7 @@ async function callChatGPTAPI(model, apiKey, finalPrompt) {
     model: model,
     messages: [
       {
-        role: "user",
+        role: 'user',
         content: finalPrompt,
       },
     ],
@@ -134,9 +134,9 @@ async function callChatGPTAPI(model, apiKey, finalPrompt) {
   });
 
   const options = {
-    method: "POST",
+    method: 'POST',
     headers: {
-      "Content-Type": "application/json",
+      'Content-Type': 'application/json',
       Authorization: `Bearer ${apiKey}`,
     },
   };
@@ -155,44 +155,44 @@ async function callChatGPTAPI(model, apiKey, finalPrompt) {
  */
 function analyzeError(error) {
   const errorMessage = error.message || error.toString();
-  const errorData = error.data?.error?.message || "";
-  const errorCode = error.data?.error?.code || "";
+  const errorData = error.data?.error?.message || '';
+  const errorCode = error.data?.error?.code || '';
 
   // Don't retry for quota/billing errors
   if (
-    errorMessage.toLowerCase().includes("quota") ||
-    errorMessage.toLowerCase().includes("billing") ||
-    errorData.toLowerCase().includes("quota") ||
-    errorData.toLowerCase().includes("billing") ||
-    errorCode === "insufficient_quota"
+    errorMessage.toLowerCase().includes('quota') ||
+    errorMessage.toLowerCase().includes('billing') ||
+    errorData.toLowerCase().includes('quota') ||
+    errorData.toLowerCase().includes('billing') ||
+    errorCode === 'insufficient_quota'
   ) {
     return { shouldRetry: false, shouldFallback: false };
   }
 
   // Don't retry for invalid API key
   if (
-    errorMessage.toLowerCase().includes("invalid api key") ||
-    errorMessage.toLowerCase().includes("unauthorized") ||
-    errorData.toLowerCase().includes("invalid api key") ||
-    errorCode === "invalid_api_key"
+    errorMessage.toLowerCase().includes('invalid api key') ||
+    errorMessage.toLowerCase().includes('unauthorized') ||
+    errorData.toLowerCase().includes('invalid api key') ||
+    errorCode === 'invalid_api_key'
   ) {
     return { shouldRetry: false, shouldFallback: false };
   }
 
   // Model not found or not available - try fallback models
   if (
-    errorMessage.toLowerCase().includes("model") ||
-    errorData.toLowerCase().includes("model") ||
-    errorCode === "model_not_found"
+    errorMessage.toLowerCase().includes('model') ||
+    errorData.toLowerCase().includes('model') ||
+    errorCode === 'model_not_found'
   ) {
     return { shouldRetry: false, shouldFallback: true };
   }
 
   // Rate limit - don't retry immediately
   if (
-    errorMessage.toLowerCase().includes("rate limit") ||
-    errorData.toLowerCase().includes("rate limit") ||
-    errorCode === "rate_limit_exceeded"
+    errorMessage.toLowerCase().includes('rate limit') ||
+    errorData.toLowerCase().includes('rate limit') ||
+    errorCode === 'rate_limit_exceeded'
   ) {
     return { shouldRetry: false, shouldFallback: false };
   }
@@ -211,13 +211,13 @@ function analyzeError(error) {
 async function summarizeWithChatGPT(
   projectCommits,
   apiKey,
-  blockerInfo = "None"
+  blockerInfo = 'None'
 ) {
   // STEP 1: Load the custom prompt template (or use default)
   const promptTemplate = loadPromptTemplate();
 
   // STEP 2: Store all project data in a structured variable
-  let projectDataText = "";
+  let projectDataText = '';
 
   // Loop through each project and build comprehensive data
   for (const project of projectCommits) {
@@ -225,16 +225,16 @@ async function summarizeWithChatGPT(
 
     // Store git commits with their associated Jira ticket details
     if (project.commits && project.commits.length > 0) {
-      projectDataText += "GIT COMMITS WITH TICKET DETAILS:\n";
-      projectDataText += project.commits.join("\n");
-      projectDataText += "\n\n";
+      projectDataText += 'GIT COMMITS WITH TICKET DETAILS:\n';
+      projectDataText += project.commits.join('\n');
+      projectDataText += '\n\n';
     }
 
     // Store all active Jira tickets (To Do and In Progress) sorted by priority
     if (project.activeTickets && project.activeTickets.length > 0) {
       projectDataText +=
-        "ACTIVE JIRA TICKETS (To Do & In Progress - Sorted by Priority):\n";
-      project.activeTickets.forEach((ticket) => {
+        'ACTIVE JIRA TICKETS (To Do & In Progress - Sorted by Priority):\n';
+      project.activeTickets.forEach(ticket => {
         projectDataText += `${ticket.key} [Status: ${ticket.status}] [Priority: ${ticket.priority}]\n`;
         projectDataText += `  Title: ${ticket.summary}\n`;
         projectDataText += `  Description: ${ticket.description}\n`;
@@ -242,36 +242,36 @@ async function summarizeWithChatGPT(
       });
     }
 
-    projectDataText += "=".repeat(50) + "\n";
+    projectDataText += '='.repeat(50) + '\n';
   }
 
   // STEP 3: Create the final prompt
-  let finalPrompt = promptTemplate.replace("{PROJECT_DATA}", projectDataText);
-  finalPrompt = finalPrompt.replace("{BLOCKERS}", blockerInfo);
+  let finalPrompt = promptTemplate.replace('{PROJECT_DATA}', projectDataText);
+  finalPrompt = finalPrompt.replace('{BLOCKERS}', blockerInfo);
 
   // STEP 4: Retry mechanism with model fallback
   // Try different models in order of preference
   const retrySequence = [
     {
-      model: "gpt-4o-mini",
+      model: 'gpt-4o-mini',
       attempt: 1,
-      description: "GPT-4o Mini (Cost-effective)",
+      description: 'GPT-4o Mini (Cost-effective)',
     },
-    { model: "gpt-4o-mini", attempt: 2, description: "GPT-4o Mini (Retry)" },
+    { model: 'gpt-4o-mini', attempt: 2, description: 'GPT-4o Mini (Retry)' },
     {
-      model: "gpt-3.5-turbo",
+      model: 'gpt-3.5-turbo',
       attempt: 1,
-      description: "GPT-3.5 Turbo (Fallback)",
+      description: 'GPT-3.5 Turbo (Fallback)',
     },
     {
-      model: "gpt-3.5-turbo",
+      model: 'gpt-3.5-turbo',
       attempt: 2,
-      description: "GPT-3.5 Turbo (Retry)",
+      description: 'GPT-3.5 Turbo (Retry)',
     },
     {
-      model: "gpt-4o-mini",
+      model: 'gpt-4o-mini',
       attempt: 3,
-      description: "GPT-4o Mini (Final attempt)",
+      description: 'GPT-4o Mini (Final attempt)',
     },
   ];
 
@@ -286,7 +286,7 @@ async function summarizeWithChatGPT(
         console.log(`🔄 Retrying with ${description}...`);
       }
 
-      const summary = await callChatGPTAPI("gpt-4o-mini", apiKey, finalPrompt);
+      const summary = await callChatGPTAPI('gpt-4o-mini', apiKey, finalPrompt);
 
       // If successful, return immediately
       if (summary) {
@@ -314,7 +314,7 @@ async function summarizeWithChatGPT(
       // If this is not the last attempt, continue to next retry
       if (i < retrySequence.length - 1) {
         // Small delay before retry (1 second)
-        await new Promise((resolve) => setTimeout(resolve, 1000));
+        await new Promise(resolve => setTimeout(resolve, 1000));
         continue;
       }
     }
@@ -332,7 +332,7 @@ async function summarizeWithChatGPT(
     );
   }
 
-  throw new Error("Failed to generate AI summary: No response received");
+  throw new Error('Failed to generate AI summary: No response received');
 }
 
 module.exports = {

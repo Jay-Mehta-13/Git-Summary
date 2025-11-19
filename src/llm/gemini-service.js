@@ -1,7 +1,7 @@
 const fs = require("fs");
 const path = require("path");
 
-const PROMPT_FILE = path.join(__dirname, "custom-prompt.txt");
+const PROMPT_FILE = path.join(__dirname, 'custom-prompt.txt');
 
 // Default prompt template
 const DEFAULT_PROMPT = `You are a technical assistant helping create a daily standup update. Analyze git commits, Jira ticket details, active tickets, and blocker information to provide a comprehensive summary.
@@ -69,13 +69,13 @@ IMPORTANT RULES:
 function loadPromptTemplate() {
   try {
     if (fs.existsSync(PROMPT_FILE)) {
-      const customPrompt = fs.readFileSync(PROMPT_FILE, "utf-8");
+      const customPrompt = fs.readFileSync(PROMPT_FILE, 'utf-8');
       if (customPrompt.trim()) {
         return customPrompt;
       }
     }
   } catch (error) {
-    console.warn("⚠️  Could not load custom prompt, using default");
+    console.warn('⚠️  Could not load custom prompt, using default');
   }
   return DEFAULT_PROMPT;
 }
@@ -87,7 +87,7 @@ function createDefaultPromptFile() {
   if (!fs.existsSync(PROMPT_FILE)) {
     fs.writeFileSync(PROMPT_FILE, DEFAULT_PROMPT);
     console.log(`✅ Created custom prompt template at: ${PROMPT_FILE}`);
-    console.log("💡 You can edit this file to customize the AI prompt\n");
+    console.log('💡 You can edit this file to customize the AI prompt\n');
   }
 }
 
@@ -148,7 +148,7 @@ async function callGeminiAPI(model, apiKey, finalPrompt) {
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
 
   const options = {
-    method: "POST",
+    method: 'POST',
     headers: {
       "Content-Type": "application/json",
     },
@@ -168,25 +168,25 @@ async function callGeminiAPI(model, apiKey, finalPrompt) {
  */
 function shouldRetry(error) {
   const errorMessage = error.message || error.toString();
-  const errorData = error.data?.error?.message || "";
+  const errorData = error.data?.error?.message || '';
 
   // Don't retry for rate limit errors
   if (
-    errorMessage.toLowerCase().includes("rate limit") ||
-    errorMessage.toLowerCase().includes("quota") ||
-    errorData.toLowerCase().includes("rate limit") ||
-    errorData.toLowerCase().includes("quota")
+    errorMessage.toLowerCase().includes('rate limit') ||
+    errorMessage.toLowerCase().includes('quota') ||
+    errorData.toLowerCase().includes('rate limit') ||
+    errorData.toLowerCase().includes('quota')
   ) {
     return false;
   }
 
   // Don't retry for unauthorized/authentication errors
   if (
-    errorMessage.toLowerCase().includes("unauthorized") ||
-    errorMessage.toLowerCase().includes("invalid api key") ||
-    errorMessage.toLowerCase().includes("authentication") ||
-    errorData.toLowerCase().includes("unauthorized") ||
-    errorData.toLowerCase().includes("invalid api key")
+    errorMessage.toLowerCase().includes('unauthorized') ||
+    errorMessage.toLowerCase().includes('invalid api key') ||
+    errorMessage.toLowerCase().includes('authentication') ||
+    errorData.toLowerCase().includes('unauthorized') ||
+    errorData.toLowerCase().includes('invalid api key')
   ) {
     return false;
   }
@@ -205,13 +205,13 @@ function shouldRetry(error) {
 async function summarizeWithGemini(
   projectCommits,
   apiKey,
-  blockerInfo = "None"
+  blockerInfo = 'None'
 ) {
   // STEP 1: Load the custom prompt template (or use default)
   const promptTemplate = loadPromptTemplate();
 
   // STEP 2: Store all project data in a structured variable
-  let projectDataText = "";
+  let projectDataText = '';
 
   // Loop through each project and build comprehensive data
   for (const project of projectCommits) {
@@ -219,16 +219,16 @@ async function summarizeWithGemini(
 
     // Store git commits with their associated Jira ticket details
     if (project.commits && project.commits.length > 0) {
-      projectDataText += "GIT COMMITS WITH TICKET DETAILS:\n";
-      projectDataText += project.commits.join("\n");
-      projectDataText += "\n\n";
+      projectDataText += 'GIT COMMITS WITH TICKET DETAILS:\n';
+      projectDataText += project.commits.join('\n');
+      projectDataText += '\n\n';
     }
 
     // Store all active Jira tickets (To Do and In Progress) sorted by priority
     if (project.activeTickets && project.activeTickets.length > 0) {
       projectDataText +=
-        "ACTIVE JIRA TICKETS (To Do & In Progress - Sorted by Priority):\n";
-      project.activeTickets.forEach((ticket) => {
+        'ACTIVE JIRA TICKETS (To Do & In Progress - Sorted by Priority):\n';
+      project.activeTickets.forEach(ticket => {
         projectDataText += `${ticket.key} [Status: ${ticket.status}] [Priority: ${ticket.priority}]\n`;
         projectDataText += `  Title: ${ticket.summary}\n`;
         projectDataText += `  Description: ${ticket.description}\n`;
@@ -236,20 +236,20 @@ async function summarizeWithGemini(
       });
     }
 
-    projectDataText += "=".repeat(50) + "\n";
+    projectDataText += '='.repeat(50) + '\n';
   }
 
   // STEP 3: Create the final prompt
-  let finalPrompt = promptTemplate.replace("{PROJECT_DATA}", projectDataText);
-  finalPrompt = finalPrompt.replace("{BLOCKERS}", blockerInfo);
+  let finalPrompt = promptTemplate.replace('{PROJECT_DATA}', projectDataText);
+  finalPrompt = finalPrompt.replace('{BLOCKERS}', blockerInfo);
 
   // STEP 4: Retry mechanism with model fallback
   const retrySequence = [
-    { model: "gemini-2.5-pro", attempt: 1 },
-    { model: "gemini-2.5-pro", attempt: 2 },
-    { model: "gemini-2.5-flash", attempt: 1 },
-    { model: "gemini-2.5-flash", attempt: 2 },
-    { model: "gemini-2.5-pro", attempt: 3 }, // Final attempt with pro
+    { model: 'gemini-2.5-pro', attempt: 1 },
+    { model: 'gemini-2.5-pro', attempt: 2 },
+    { model: 'gemini-2.5-flash', attempt: 1 },
+    { model: 'gemini-2.5-flash', attempt: 2 },
+    { model: 'gemini-2.5-pro', attempt: 3 }, // Final attempt with pro
   ];
 
   let lastError = null;
@@ -292,7 +292,7 @@ async function summarizeWithGemini(
       // If this is not the last attempt, continue to next retry
       if (i < retrySequence.length - 1) {
         // Small delay before retry (500ms)
-        await new Promise((resolve) => setTimeout(resolve, 500));
+        await new Promise(resolve => setTimeout(resolve, 500));
         continue;
       }
     }
@@ -310,18 +310,18 @@ async function summarizeWithGemini(
     );
   }
 
-  throw new Error("Failed to generate AI summary: No response received");
+  throw new Error('Failed to generate AI summary: No response received');
 }
 /**
  * Display the AI summary in a formatted box
  * @param {string} summary - The AI generated summary
  */
 function displaySummary(summary) {
-  console.log("\n═══════════════════════════════════════");
-  console.log("🤖 AI Summary");
-  console.log("═══════════════════════════════════════");
+  console.log('\n═══════════════════════════════════════');
+  console.log('🤖 AI Summary');
+  console.log('═══════════════════════════════════════');
   console.log(summary);
-  console.log("═══════════════════════════════════════\n");
+  console.log('═══════════════════════════════════════\n');
 }
 
 module.exports = {

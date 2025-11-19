@@ -10,7 +10,7 @@ async function fetchJiraTicket(ticketId, config) {
       method: "GET",
       headers: {
         Authorization: `Basic ${auth}`,
-        Accept: "application/json",
+        Accept: 'application/json',
       },
     });
 
@@ -133,9 +133,9 @@ async function fetchTicketDescription(ticketId, config) {
 
   const system = config.taskManagementSystem?.toLowerCase();
 
-  if (system === "jira") {
+  if (system === 'jira') {
     return await fetchJiraTicket(ticketId, config);
-  } else if (system === "zoho") {
+  } else if (system === 'zoho') {
     return await fetchZohoTicket(ticketId, config);
   } else {
     console.log(
@@ -160,7 +160,7 @@ async function fetchAllJiraTickets(jiraConfig, userEmail) {
     // Use apiEmail for authentication if available, fallback to email
     const authEmail = jiraConfig.apiEmail || jiraConfig.email;
     const auth = Buffer.from(`${authEmail}:${jiraConfig.apiToken}`).toString(
-      "base64"
+      'base64'
     );
 
     // JQL query to fetch "To Do" and "In Progress" tickets assigned to the user
