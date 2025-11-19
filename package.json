@@ -1,0 +1,14 @@
+{
+  "name": "dsu",
+  "version": "1.0.0",
+  "description": "Daily Stand-Up",
+  "main": "index.js",
+  "scripts": {
+    "start": "node src/main.js",
+    "format": "prettier --write .",
+    "format:check": "prettier --check ."
+  },
+  "devDependencies": {
+    "prettier": "^3.1.0"
+  }
+}
