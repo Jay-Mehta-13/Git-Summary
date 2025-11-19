@@ -1,12 +1,22 @@
 {
-  "projectName": "YOUR_PROJECT_NAME",
-  "projectPath": "/path/to/your/project",
   "author": "Your Name",
   "geminiApiKey": "your-gemini-api-key-here",
-  "taskManagementSystem": "jira",
-  "jiraDomain": "your-domain.atlassian.net",
-  "jiraEmail": "your-email@example.com",
-  "jiraApiToken": "your-jira-api-token",
+  "projects": [
+    {
+      "name": "Project A",
+      "path": "/path/to/your/project-a",
+      "jira": {
+        "domain": "your-domain.atlassian.net",
+        "apiEmail": "api-creator@example.com",
+        "apiToken": "your-jira-api-token",
+        "assigneeEmail": "your-email@example.com"
+      }
+    },
+    {
+      "name": "Project B",
+      "path": "/path/to/your/project-b"
+    }
+  ],
   "customTicketPatterns": [],
   "setupDate": "2025-01-01T00:00:00.000Z"
 }

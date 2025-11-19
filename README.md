@@ -1,18 +1,21 @@
 # Git Summary - Daily Standup Report Generator
 
-A Node.js script that generates professional daily standup reports from your git commits using AI-powered summarization with Google Gemini.
+A Node.js script that generates professional daily standup reports from your git commits using AI-powered summarization with Google Gemini or OpenAI ChatGPT.
 
 ## Features
 
 - 🔍 Fetches git commits since yesterday
 - 👤 Filters by author name
+- 📁 **Multi-project support** - Track commits across multiple repositories
 - 🎫 Extracts ticket IDs from commit messages (Jira support)
-- 📋 Fetches ticket title and description from Jira (optional)
-- 🤖 AI-powered commit summaries using Google Gemini 2.5 Flash
+- 📋 Fetches ticket title and description from Jira (optional per project)
+- 🤖 **Dual AI support** - Choose between Google Gemini or OpenAI ChatGPT
+- 🔄 **Switch LLMs anytime** - Easily switch between AI providers
 - 🚧 Interactive blocker tracking
-- ✏️ Customizable AI prompts
+- ✏️ Customizable AI prompts (shared across both LLMs)
 - 🔧 Interactive setup wizard
 - 📊 Formatted daily standup reports
+- 📅 **Date-specific reports** - Fetch commits for any specific date
 - 🎯 No external packages required (uses native Node.js modules)
 
 ## Quick Start
@@ -25,32 +28,50 @@ A Node.js script that generates professional daily standup reports from your git
 
 2. Follow the interactive setup wizard to configure:
 
-   - Project name (e.g., "SIMGROW")
-   - Project path (absolute path to your git repository)
-   - Git author name
-   - Gemini API key (required) - Get from [Google AI Studio](https://makersuite.google.com/app/apikey)
-   - Jira integration (optional)
+   - Git author name (used across all projects)
+   - **Choose your AI provider**: Gemini (Google) or ChatGPT (OpenAI)
+   - API key for your chosen provider:
+     - Gemini: Get from [Google AI Studio](https://makersuite.google.com/app/apikey)
+     - ChatGPT: Get from [OpenAI Platform](https://platform.openai.com/api-keys)
+   - First project details:
+     - Project name (e.g., "SIMGROW")
+     - Project path (absolute path to your git repository)
+     - Jira integration (optional per project)
 
 3. The script will automatically create:
 
    - `config.json` - Your configuration
    - `custom-prompt.txt` - AI prompt template (fully customizable)
 
-4. Run the script daily to generate standup reports:
+4. Add more projects (optional):
+
+   ```bash
+   node git-log.js --add-project
+   ```
+
+5. Run the script daily to generate standup reports:
    ```bash
    node git-log.js
    ```
 
 ## Commands
 
-| Command                           | Description                                   |
-| --------------------------------- | --------------------------------------------- |
-| `node git-log.js`                 | Run with existing config                      |
-| `node git-log.js --setup` or `-s` | Reset config and run setup wizard             |
-| `node git-log.js --help` or `-h`  | Show help message                             |
-| `node test-api.js`                | Test Gemini API key and list available models |
+| Command                                       | Description                                      |
+| --------------------------------------------- | ------------------------------------------------ |
+| `node git-log.js`                             | Run with existing config                         |
+| `node git-log.js --setup` or `-s`             | Reset config and run setup wizard                |
+| `node git-log.js --add-project` or `-a`       | Add a new project to existing config             |
+| `node git-log.js --list-projects` or `-l`     | List all configured projects                     |
+| `node git-log.js --fetch-tickets` or `-t`     | Fetch all active Jira tickets for all projects   |
+| `node git-log.js --blocker "text"` or `-b`    | Skip blocker prompt, use provided text or "None" |
+| `node git-log.js --date "YYYY-MM-DD"` or `-d` | Fetch commits for a specific date                |
+| `node git-log.js --switch-llm` or `-llm`      | Switch between Gemini and ChatGPT                |
+| `node git-log.js --help` or `-h`              | Show help message                                |
+| `node test-api.js`                            | Test Gemini API key and list available models    |
 
 ## Daily Usage
+
+### Interactive Mode (Default)
 
 1. **Start of your workday**: Run the script to generate your standup report
 
@@ -69,35 +90,287 @@ A Node.js script that generates professional daily standup reports from your git
 
 5. **Copy the summary**: Use the formatted output for your daily standup meeting or Slack update
 
+### Quick Mode with Blocker Flag
+
+Skip the interactive blocker prompt by using the `--blocker` flag:
+
+**No blockers:**
+
+```bash
+node git-log.js --blocker
+# or
+node git-log.js -b
+```
+
+**With blocker description:**
+
+```bash
+node git-log.js --blocker "Waiting for API access from client"
+# or
+node git-log.js -b "Waiting for API access from client"
+```
+
+This is useful for:
+
+- Automation scripts or CI/CD pipelines
+- Quick standup generation when you know you have no blockers
+- Pre-filling blocker information without interactive prompts
+
+### Date-Specific Reports
+
+Fetch commits for a specific date instead of "since yesterday":
+
+```bash
+node git-log.js --date "2025-11-14"
+# or
+node git-log.js -d "2025-11-14"
+```
+
+**Format:** Use `YYYY-MM-DD` format
+
+**Use Cases:**
+
+- Generate retrospective reports for past dates
+- Catch up on missed standup days
+- Review work done on specific dates for timesheets
+- Create reports for days you were on leave
+
+**Example:**
+
+```bash
+# Generate report for November 14, 2025
+node git-log.js --date "2025-11-14"
+
+# Combine with blocker flag
+node git-log.js --date "2025-11-14" --blocker
+```
+
+The tool will fetch commits from the specified date (00:00:00) to the next day (00:00:00), giving you a complete daily report.
+
 ## Configuration
 
 Configuration is automatically created during setup in `config.json`.
 
-### Required Fields
+### Global Configuration
 
-| Field          | Description                                                                                   |
-| -------------- | --------------------------------------------------------------------------------------------- |
-| `projectName`  | Your project name (displayed in the standup report)                                           |
-| `projectPath`  | Absolute path to your git project directory                                                   |
-| `author`       | Your git author name for filtering commits                                                    |
-| `geminiApiKey` | Google Gemini API key (get from [Google AI Studio](https://makersuite.google.com/app/apikey)) |
+| Field                  | Description                                                                                   | Required         |
+| ---------------------- | --------------------------------------------------------------------------------------------- | ---------------- |
+| `author`               | Your git author name for filtering commits (applies to all projects)                          | Yes              |
+| `llmProvider`          | AI provider: `"gemini"` or `"chatgpt"` (default: `"gemini"`)                                  | Yes              |
+| `geminiApiKey`         | Google Gemini API key (get from [Google AI Studio](https://makersuite.google.com/app/apikey)) | If using Gemini  |
+| `chatgptApiKey`        | OpenAI API key (get from [OpenAI Platform](https://platform.openai.com/api-keys))             | If using ChatGPT |
+| `customTicketPatterns` | Array of regex patterns for custom ticket formats                                             | No               |
 
-### Optional Fields
+### Project Configuration
 
-| Field                  | Description                                       | Default  |
-| ---------------------- | ------------------------------------------------- | -------- |
-| `taskManagementSystem` | Task system: `"jira"` or `"none"`                 | `"none"` |
-| `customTicketPatterns` | Array of regex patterns for custom ticket formats | `[]`     |
+Each project in the `projects` array has the following structure:
 
-### Jira Configuration (Optional)
+| Field  | Description                           | Required |
+| ------ | ------------------------------------- | -------- |
+| `name` | Project name (displayed in reports)   | Yes      |
+| `path` | Absolute path to git repository       | Yes      |
+| `jira` | Jira configuration object (see below) | No       |
 
-If you enable Jira integration during setup:
+### Jira Configuration (Optional per Project)
 
-| Field          | Description                                                                                             |
-| -------------- | ------------------------------------------------------------------------------------------------------- |
-| `jiraDomain`   | Your Jira domain (e.g., `company.atlassian.net`)                                                        |
-| `jiraEmail`    | Email for your Jira account                                                                             |
-| `jiraApiToken` | Generate from [Atlassian Account Security](https://id.atlassian.com/manage-profile/security/api-tokens) |
+Each project can have its own Jira configuration:
+
+| Field           | Description                                                                                             |
+| --------------- | ------------------------------------------------------------------------------------------------------- |
+| `domain`        | Your Jira domain (e.g., `company.atlassian.net`)                                                        |
+| `apiEmail`      | Email of the user who created the API token (used for authentication)                                   |
+| `apiToken`      | Generate from [Atlassian Account Security](https://id.atlassian.com/manage-profile/security/api-tokens) |
+| `assigneeEmail` | Email of the user whose tickets you want to fetch (used in JQL queries)                                 |
+
+### Example Config Structure
+
+```json
+{
+  "author": "John Doe",
+  "llmProvider": "gemini",
+  "geminiApiKey": "your-gemini-api-key-here",
+  "chatgptApiKey": "your-chatgpt-api-key-here",
+  "projects": [
+    {
+      "name": "Project A",
+      "path": "/home/user/projects/project-a",
+      "jira": {
+        "domain": "company.atlassian.net",
+        "apiEmail": "admin@company.com",
+        "apiToken": "your-jira-token",
+        "assigneeEmail": "john@company.com"
+      }
+    },
+    {
+      "name": "Project B",
+      "path": "/home/user/projects/project-b"
+    }
+  ],
+  "customTicketPatterns": [],
+  "setupDate": "2025-01-01T00:00:00.000Z"
+}
+```
+
+**Note:** You only need to configure the API key for the LLM provider you're using. However, having both keys configured allows you to easily switch between providers using the `--switch-llm` flag.
+
+## Switching Between AI Providers
+
+You can easily switch between Google Gemini and OpenAI ChatGPT at any time:
+
+```bash
+node git-log.js --switch-llm
+# or
+node git-log.js -llm
+```
+
+The tool will:
+
+1. Show your current LLM provider
+2. Prompt you to choose between Gemini or ChatGPT
+3. Check if the API key exists for your chosen provider
+4. Ask for the API key if not already configured
+5. Update your configuration
+
+### Why Switch?
+
+- **Gemini (Google)**: Fast, cost-effective, good for daily standup reports
+- **ChatGPT (OpenAI)**: Higher quality summaries, better context understanding
+- **Try Both**: Compare output quality and choose what works best for your team
+
+### Custom Prompts Work with Both
+
+The `custom-prompt.txt` file is shared between both AI providers, so your customized prompt template will work regardless of which LLM you choose.
+
+## Managing Multiple Projects
+
+### Adding Projects
+
+You can manage multiple repositories and get a unified standup report:
+
+1. **During initial setup**: Configure your first project
+2. **Add more projects**:
+   ```bash
+   node git-log.js --add-project
+   ```
+3. **Follow the prompts** for each new project (name, path, Jira config)
+
+### Listing Projects
+
+View all configured projects:
+
+```bash
+node git-log.js --list-projects
+```
+
+### Fetching Jira Tickets
+
+View all active Jira tickets across all projects:
+
+```bash
+node git-log.js --fetch-tickets
+```
+
+or use the short version:
+
+```bash
+node git-log.js -t
+```
+
+This command will:
+
+- Fetch all **"In Progress"** tickets assigned to the configured user
+- Show comprehensive details for each ticket including:
+  - Ticket key, summary, status, priority, and type
+  - Reporter name and creation date
+  - Last updated date
+  - Labels and components (if any)
+  - Full description with word wrapping for readability
+- Display results organized by project
+
+**Example output:**
+
+```
+📋 Fetching Jira Tickets for All Projects
+═══════════════════════════════════════
+
+📁 Project: SIMGROW
+   Assignee: john.doe@company.com
+───────────────────────────────────────
+   ✨ Found 2 "In Progress" ticket(s):
+
+   1. PROJ-123: Implement user authentication
+      ─────────────────────────────────────
+      Status: In Progress
+      Priority: High
+      Type: Story
+      Reporter: Jane Smith
+      Created: 11/10/2025
+      Updated: 11/14/2025
+      Labels: backend, security
+      Components: Authentication Module
+      Description:
+         Need to implement OAuth 2.0 authentication flow for the
+         application. Should support multiple providers including
+         Google and GitHub.
+
+   2. PROJ-124: Fix login bug
+      ─────────────────────────────────────
+      Status: In Progress
+      Priority: Medium
+      Type: Bug
+      Reporter: John Doe
+      Created: 11/12/2025
+      Updated: 11/13/2025
+      Description:
+         Users unable to login with special characters in password.
+```
+
+### Multi-Project Workflow
+
+When you have multiple projects configured:
+
+1. The tool runs `git log` on **each project** repository
+2. Commits are **labeled with project names** (e.g., `[Project A] JIRA-123: Fix bug`)
+3. All commits are **aggregated** and shown grouped by project
+4. A **unified AI summary** is generated covering all projects
+5. If projects have different Jira configs, **each uses its own** Jira credentials
+
+### Example Multi-Project Output
+
+```
+📊 Git Activity Report
+═══════════════════════════════════════
+👤 Author: John Doe
+📅 Date: Fri Jan 10 09:30:00 2025 +0000
+📁 Projects: 3
+═══════════════════════════════════════
+
+📁 Project: Frontend App
+   Path: /home/user/projects/frontend
+───────────────────────────────────────
+
+   ✨ Commits:
+
+      FEAT-123 | Implement user authentication
+      Description: Add login and signup forms
+      abc1234 Implement login page
+
+📁 Project: Backend API
+   Path: /home/user/projects/backend
+───────────────────────────────────────
+
+   ✨ Commits:
+
+      API-456 | Create user endpoints
+      Description: REST API for user management
+      def5678 Add user CRUD operations
+
+═══════════════════════════════════════
+
+🚧 Do you have any blockers? (yes/no): no
+
+🤖 Generating AI summary...
+```
 
 ## Custom AI Prompts
 
@@ -105,22 +378,26 @@ After first setup, a `custom-prompt.txt` file is created. Edit this file to cust
 
 **Template Variables:**
 
-- `{COMMITS}` - Will be replaced with your actual git commits
-- `{PROJECT_NAME}` - Will be replaced with your project name
+- `{COMMITS}` - Will be replaced with your actual git commits organized by project
+- `{PROJECT_NAMES}` - Will be replaced with comma-separated list of project names
 - `{BLOCKERS}` - Will be replaced with blocker information
 - `{BLOCKER_SECTION}` - Pre-processed blocker section
 
 **Default Format:**
 
-The tool generates standup reports in this format:
+The tool generates standup reports with **separate sections for each project**:
 
 ```
 Blocker:
    None (or bullet points if blockers exist)
 
 Today's Update:
-   [PROJECT_NAME]:
-   • Ticket-ID: Description of work done
+
+   Project Name 1:
+   • Ticket-ID: Description of work done for this project
+
+   Project Name 2:
+   • Ticket-ID: Description of work done for this project
 
 Tomorrow's Plan:
    • Suggested next steps based on today's work
@@ -138,15 +415,23 @@ You can fully customize the prompt in `custom-prompt.txt` to change:
 ## How It Works
 
 1. **Setup Configuration**: On first run, interactive wizard collects your settings
-2. **Fetch Git Commits**: Retrieves commits since yesterday for your author
-3. **Display Commits**: Shows commits immediately in the terminal
+2. **Fetch Git Commits**: Retrieves commits since yesterday for your author from **each configured project**
+3. **Display Commits**: Shows commits immediately in the terminal, organized by project
 4. **Extract Ticket IDs**: Automatically detects ticket IDs from commit messages
-5. **Fetch Jira Details**: (Optional) Gets ticket information from Jira
-6. **Ask About Blockers**: Interactive prompt to capture any blockers
-7. **AI Processing**: Sends data to Gemini API with your custom prompt
-8. **Display Report**: Shows formatted daily standup report
+5. **Fetch Jira Details**: (Optional) Gets ticket information from Jira using project-specific credentials
+6. **Ask About Blockers**: Interactive prompt to capture any blockers (asked once for all projects)
+7. **AI Processing**: Sends all project commits to Gemini API with your custom prompt
+8. **Display Report**: Shows formatted daily standup report with **separate sections for each project**
 
 The process is non-blocking - you see your commits immediately while the AI summary is being generated.
+
+### Multi-Project AI Summary
+
+When you have multiple projects, the AI generates:
+
+- **Separate "Today's Update" sections** for each project
+- **Unified "Tomorrow's Plan"** considering work across all projects
+- **Single "Blocker" section** applicable to all work
 
 ## Supported Ticket Formats
 
@@ -233,7 +518,9 @@ Tomorrow's Plan:
 
 ```
 ├── git-log.js              # Main script - entry point
+├── llm-service.js          # Unified LLM interface (routes to Gemini or ChatGPT)
 ├── gemini-service.js       # Gemini AI integration (uses native https module)
+├── chatgpt-service.js      # ChatGPT AI integration (uses native https module)
 ├── ticket-api.js           # Jira API integration
 ├── test-api.js             # API key testing utility
 ├── config.json             # Your configuration (auto-generated, gitignored)
@@ -245,11 +532,13 @@ Tomorrow's Plan:
 ### Key Files
 
 - **git-log.js**: Main script that orchestrates the entire flow
-- **gemini-service.js**: Handles AI summarization using Google Gemini 2.5 Flash
+- **llm-service.js**: Unified interface that routes to the correct AI provider
+- **gemini-service.js**: Handles AI summarization using Google Gemini 2.5 Pro
+- **chatgpt-service.js**: Handles AI summarization using OpenAI GPT-4
 - **ticket-api.js**: Fetches ticket details from Jira (optional)
 - **test-api.js**: Utility to test your Gemini API key and list available models
 - **config.json**: Stores your configuration (created during setup)
-- **custom-prompt.txt**: Customizable prompt template for AI summarization
+- **custom-prompt.txt**: Customizable prompt template for AI summarization (shared by both LLMs)
 
 ## Troubleshooting
 
@@ -260,19 +549,27 @@ Tomorrow's Plan:
 - Check `author` filter matches your git author name exactly
 - Try running `git log --since="yesterday" --author="YourName"` manually in your project directory
 
-### Gemini API errors
+### AI API errors
 
-#### "Model not found" error
+#### Gemini "Model not found" error
 
 - Run `node test-api.js` to verify your API key and see available models
-- The tool uses `gemini-2.5-flash` model by default
+- The tool uses `gemini-2.5-pro` model by default
 - Ensure you have a valid API key from [Google AI Studio](https://makersuite.google.com/app/apikey)
+
+#### ChatGPT Authentication error
+
+- Verify your OpenAI API key is correct
+- Get or regenerate your key from [OpenAI Platform](https://platform.openai.com/api-keys)
+- The tool uses `gpt-4o` model
 
 #### Quota exceeded
 
-- Check your API quota at [Google AI Studio](https://makersuite.google.com/)
+- **Gemini**: Check your API quota at [Google AI Studio](https://makersuite.google.com/)
+- **ChatGPT**: Check your usage at [OpenAI Platform](https://platform.openai.com/usage)
 - Free tier has rate limits; wait a few minutes and retry
 - Consider upgrading your API plan if needed
+- **Alternative**: Switch to the other LLM provider using `node git-log.js --switch-llm`
 
 ### Jira API calls failing
 
